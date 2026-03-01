@@ -803,42 +803,42 @@ export default function StationeryNewReleaseOrderPage() {
              <div className="p-1 px-2 border-r border-gray-200 flex items-center font-bold text-gray-900">{selectedProduct.productCode}</div>
              <Label className="border-r border-gray-200">상품명</Label>
              <div className="p-1 px-2 border-r border-gray-200 flex items-center text-blue-700 font-bold truncate">{selectedProduct.productName}</div>
+             <Label className="border-r border-gray-200">제품번호</Label>
+             <div className="p-1 px-2 border-r border-gray-200 flex items-center text-gray-800">{selectedProduct.productNo}</div>
+             <Label className="border-r border-gray-200">발주기준단가</Label>
+             <div className="p-1 px-2 border-r border-gray-200 flex items-center text-gray-800">{selectedProduct.orderStandardPrice ? Number(selectedProduct.orderStandardPrice).toLocaleString() : ''}</div>
+             <Label className="border-r border-gray-200">정가</Label>
+             <div className="p-1 px-2 flex items-center text-gray-800">{selectedProduct.price ? Number(selectedProduct.price).toLocaleString() : ''}</div>
+         </div>
+         <div className="grid grid-cols-[80px_1fr_80px_1fr_80px_1fr_80px_1fr_80px_1fr] border-b border-gray-200">
              <Label className="border-r border-gray-200">단위/수량</Label>
              <div className="p-1 px-2 border-r border-gray-200 flex items-center text-gray-800">{selectedProduct.unitQty}</div>
              <Label className="border-r border-gray-200">매입처</Label>
              <div className="p-1 px-2 border-r border-gray-200 flex items-center text-gray-800">{selectedProduct.supplier}</div>
+             <Label className="border-r border-gray-200">매입구분</Label>
+             <div className="p-1 px-2 border-r border-gray-200 flex items-center text-gray-800">{selectedProduct.purchaseType}</div>
              <Label className="border-r border-gray-200">상품상태</Label>
-             <div className="p-1 px-2 flex items-center text-gray-800">{selectedProduct.status}</div>
+             <div className="p-1 px-2 border-r border-gray-200 flex items-center text-gray-800">{selectedProduct.status}</div>
+             <Label className="border-r border-gray-200">센터발주운영</Label>
+             <div className="p-1 px-2 flex items-center font-bold text-gray-900">{selectedProduct.centerOrderYn}</div>
          </div>
-         <div className="grid grid-cols-[80px_1fr_80px_1fr_80px_1fr_80px_1fr_80px_1fr] border-b border-gray-200">
-             <Label className="border-r border-gray-200">제품번호</Label>
-             <div className="p-1 px-2 border-r border-gray-200 flex items-center text-gray-800">{selectedProduct.productNo}</div>
+         <div className="grid grid-cols-[80px_1fr_80px_1fr_80px_1fr_80px_1fr_80px_1fr]">
              <Label className="border-r border-gray-200 bg-yellow-100" required>입하예정일</Label>
              <div className="p-0 border-r border-gray-200 bg-yellow-50">
                 <SingleDateInput val={selectedProduct.expectedInDate || ''} onChange={(val: string) => handleProductInfoChange('expectedInDate', val)} className="bg-transparent border-none" />
              </div>
              <Label className="border-r border-gray-200 bg-gray-100">입고예정일</Label>
              <div className="p-1 px-2 border-r border-gray-200 flex items-center text-gray-500 bg-gray-50">{selectedProduct.expectedReceiveDate}</div>
-             <Label className="border-r border-gray-200">반품불가</Label>
-             <div className="p-1 px-2 border-r border-gray-200 flex items-center font-bold text-blue-600">{selectedProduct.noReturnYn}</div>
              <Label className="border-r border-gray-200 bg-yellow-100" required>구매수량</Label>
-             <div className="p-0 bg-yellow-50">
+             <div className="p-0 border-r border-gray-200 bg-yellow-50">
                 <Input className="h-full w-full border-none text-right px-2 text-[11px] font-bold text-red-600 bg-transparent rounded-none" value={selectedProduct.purchaseQty || ''} onChange={(e) => handleProductInfoChange('purchaseQty', e.target.value)} />
              </div>
-         </div>
-         <div className="grid grid-cols-[80px_1fr_80px_1fr_80px_1fr_80px_1fr_80px_1fr]">
              <Label className="border-r border-gray-200 bg-yellow-100">온라인수량</Label>
              <div className="p-0 border-r border-gray-200 bg-yellow-50">
                 <Input className="h-full w-full border-none text-right px-2 text-[11px] font-bold text-blue-700 bg-transparent rounded-none" value={selectedProduct.onlineQty || ''} onChange={(e) => handleProductInfoChange('onlineQty', e.target.value)} />
              </div>
-             <Label className="border-r border-gray-200">발주기준단가</Label>
-             <div className="p-1 px-2 border-r border-gray-200 flex items-center text-gray-800">{selectedProduct.orderStandardPrice ? Number(selectedProduct.orderStandardPrice).toLocaleString() : ''}</div>
-             <Label className="border-r border-gray-200">정가</Label>
-             <div className="p-1 px-2 border-r border-gray-200 flex items-center text-gray-800">{selectedProduct.price ? Number(selectedProduct.price).toLocaleString() : ''}</div>
-             <Label className="border-r border-gray-200">매입구분</Label>
-             <div className="p-1 px-2 border-r border-gray-200 flex items-center text-gray-800">{selectedProduct.purchaseType}</div>
-             <Label className="border-r border-gray-200">센터발주운영</Label>
-             <div className="p-1 px-2 flex items-center font-bold text-gray-900">{selectedProduct.centerOrderYn}</div>
+             <Label className="border-r border-gray-200">반품불가</Label>
+             <div className="p-1 px-2 flex items-center font-bold text-blue-600">{selectedProduct.noReturnYn}</div>
          </div>
       </div>
       </div>
