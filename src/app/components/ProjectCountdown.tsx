@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router';
+import { StarConnection } from './StarConnection';
 
 const messages = [
             "개발자가 커피를 수혈받고 있습니다...",
@@ -69,6 +71,7 @@ const messages = [
 const TARGET_DATE = new Date('2027-01-01T00:00:00').getTime();
 
 export function ProjectCountdown() {
+  const navigate = useNavigate();
   const [time, setTime] = useState({ days: 0, hours: 0, mins: 0, secs: 0, ms: 0 });
   const [msg, setMsg] = useState(messages[0]);
   const [done, setDone] = useState(false);
@@ -123,18 +126,32 @@ export function ProjectCountdown() {
       className="flex flex-col items-center justify-center h-full relative overflow-hidden"
       style={{ background: '#0d1117', fontFamily: "'Courier New', Courier, monospace" }}
     >
+      {/* Matrix digital rain background */}
+      <StarConnection />
+
+      {/* Dark vignette overlay for readability */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: 'radial-gradient(ellipse at center, rgba(13,17,23,0.1) 0%, rgba(13,17,23,0.6) 100%)',
+        }}
+      />
+
       {/* Scanline overlay */}
       <div className="absolute inset-0 pointer-events-none opacity-[0.03]"
         style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.1) 2px, rgba(255,255,255,0.1) 4px)' }}
       />
 
       {/* Title */}
-      <p className="text-[16px] tracking-[5px] mb-8" style={{ color: '#c9d1d9' }}>
-        TARGET DATE: 2027.01.01 00:00:00
+      <p className="relative z-10 tracking-[3px] mb-2 text-[16px] font-[Inter]" style={{ color: '#e6edf3', fontWeight: 700 }}>
+        상품관리 통합시스템 구축
+      </p>
+      <p className="relative z-10 text-[16px] tracking-[5px] mb-8" style={{ color: '#c9d1d9' }}>
+        SYSTEM OPEN: 2027.01.01 00:00:00
       </p>
 
       {/* Timer */}
-      <div className="flex items-end gap-6">
+      <div className="relative z-10 flex items-end gap-6">
         {[
           { value: pad(time.days, 3), label: 'DAYS' },
           { value: pad(time.hours, 2), label: 'HOURS' },
@@ -175,7 +192,12 @@ export function ProjectCountdown() {
       </div>
 
       {/* Status message */}
-      <p className="mt-10 text-[15px]" style={{ color: '#ff7b72', fontWeight: 700 }}>
+      <p
+        className="relative z-10 mt-10 text-[15px] cursor-pointer transition-opacity hover:opacity-70"
+        style={{ color: '#ff7b72', fontWeight: 700 }}
+        onClick={() => navigate('/easter-egg')}
+        title="🤫"
+      >
         {'> '}{msg}
         <span
           style={{ animation: 'blink 1s step-end infinite' }}

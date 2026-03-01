@@ -42,6 +42,7 @@ import ForcedStockInPage from "./pages/37.ForcedStockInPage";
 import StationeryAlbumSalesInquiryPage from "./pages/38.StationeryAlbumSalesInquiryPage";
 import SectionArrivalRegistrationPage from "./pages/39.SectionArrivalRegistrationPage"; // ★ 39번 임포트 추가
 import DashboardPage from "./pages/DashboardPage";
+import DataMigrationGamePage from "./pages/DataMigrationGamePage";
 
 export const router = createBrowserRouter([
   {
@@ -88,6 +89,7 @@ export const router = createBrowserRouter([
       { path: "forced-stock-in", Component: ForcedStockInPage },
       { path: "stationery-album-sales-inquiry", Component: StationeryAlbumSalesInquiryPage },
       { path: "section-arrival-registration", Component: SectionArrivalRegistrationPage }, // ★ 39번 라우트 연결
+      { path: "easter-egg", Component: DataMigrationGamePage },
       { path: "*", Component: () => <div className="p-8">페이지를 찾을 수 없습니다.</div> }
     ],
   },

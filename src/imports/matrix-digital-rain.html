@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>The Matrix Digital Rain</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: black; }
+        canvas { display: block; }
+        #overlay {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff; font-family: monospace; text-align: center;
+            text-shadow: 0 0 10px #0f0; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="overlay">
+        <h1 style="font-size:3rem; letter-spacing:5px;">SYSTEM STATUS: PENDING</h1>
+        <p style="opacity:0.7;">준비 중입니다. 잠시만 기다려 주세요.</p>
+    </div>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // 매트릭스에 사용될 문자 (가타카나 + 숫자)
+        const katakana = 'アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズブヅプエェケセテネヘメレヱゲゼデベペオォコソトノホモヨョロヲゴゾドボポヴッン0123456789';
+        const alphabet = katakana.split('');
+
+        const fontSize = 16;
+        const columns = canvas.width / fontSize; // 화면 너비에 따른 열 개수
+
+        // 각 열의 현재 y 좌표를 저장할 배열
+        const drops = [];
+        for (let x = 0; x < columns; x++) {
+            drops[x] = 1; // 초기 y좌표는 1
+        }
+
+        function drawMatrix() {
+            // 배경을 아주 반투명한 검은색으로 덮어 잔상 효과 생성
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#0f0'; // 기본 초록색 글자
+            ctx.font = fontSize + 'px monospace';
+
+            for (let i = 0; i < drops.length; i++) {
+                // 랜덤 문자 선택
+                const text = alphabet[Math.floor(Math.random() * alphabet.length)];
+                
+                // 맨 위 글자는 흰색으로 반짝이게 효과 (선택 사항)
+                if (Math.random() > 0.975) ctx.fillStyle = '#fff';
+                else ctx.fillStyle = '#0f0';
+
+                // 문자 그리기 (x는 열 위치, y는 drops[i]*fontSize 위치)
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+                // 화면 하단에 도달하면 랜덤하게 맨 위로 리셋
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                
+                // y 좌표 증가
+                drops[i]++;
+            }
+        }
+
+        // 애니메이션 속도 조절 (밀리초)
+        setInterval(drawMatrix, 35);
+
+        // 창 크기 변경 대응
+        window.addEventListener('resize', function() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            // 열 개수 재계산 필요
+            const newColumns = canvas.width / fontSize;
+            const currentLength = drops.length;
+            if (newColumns > currentLength) {
+                for(let i=currentLength; i<newColumns; i++) drops[i] = 1;
+            }
+        });
+    </script>
+</body>
+</html>

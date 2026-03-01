@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>데이터 수동 이관 대작전</title>
+    <style>
+        body {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            font-family: 'Malgun Gothic', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 50px 20px;
+            margin: 0;
+            user-select: none; /* 텍스트 선택 방지 */
+        }
+        
+        .header { text-align: center; margin-bottom: 30px; }
+        .header h1 { color: #569cd6; margin: 0 0 10px 0; }
+        .header p { color: #9cdcfe; font-size: 1.1rem; }
+
+        .game-container {
+            display: flex;
+            gap: 50px;
+            background: #252526;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 1px solid #333;
+        }
+
+        /* 왼쪽: 클릭 영역 */
+        .click-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 300px;
+        }
+        
+        .score-box {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #4ec9b0;
+            margin-bottom: 20px;
+        }
+
+        .click-btn {
+            background: #007acc;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 150px;
+            height: 150px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.1s, background 0.2s;
+            box-shadow: 0 5px 15px rgba(0, 122, 204, 0.4);
+        }
+
+        .click-btn:active {
+            transform: scale(0.95);
+            background: #005f9e;
+        }
+
+        .stats {
+            margin-top: 20px;
+            color: #c586c0;
+            text-align: center;
+            line-height: 1.6;
+        }
+
+        /* 오른쪽: 상점 영역 */
+        .store-area {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 350px;
+        }
+
+        .store-title {
+            font-size: 1.2rem;
+            color: #ce9178;
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .item-btn {
+            background: #333333;
+            border: 1px solid #444;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: left;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s;
+        }
+
+        .item-btn:hover:not(:disabled) { background: #444; }
+        .item-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .item-info { display: flex; flex-direction: column; }
+        .item-name { font-weight: bold; color: #dcdcaa; font-size: 1.1rem; }
+        .item-desc { font-size: 0.85rem; color: #808080; margin-top: 5px; }
+        .item-cost { font-weight: bold; color: #f44336; }
+        .item-count { font-size: 1.2rem; font-weight: bold; color: #569cd6; margin-left: 15px; }
+
+        /* 클릭할 때 떠오르는 텍스트 애니메이션 */
+        .floating-text {
+            position: absolute;
+            color: #4ec9b0;
+            font-weight: bold;
+            pointer-events: none;
+            animation: floatUp 1s ease-out forwards;
+        }
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-50px); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>2027.01.01 GRAND OPEN</h1>
+        <p>기다리기 지루하신가요? 시스템 통합을 위해 데이터를 수동으로 옮겨주세요!</p>
+    </div>
+
+    <div class="game-container">
+        <div class="click-area">
+            <div class="score-box"><span id="score">0</span> Byte</div>
+            <button class="click-btn" id="mainBtn">데이터 이관<br>(Click!)</button>
+            <div class="stats">
+                클릭 파워: <span id="clickPowerDisplay">1</span> Byte/클릭<br>
+                자동 이관: <span id="autoPowerDisplay">0</span> Byte/초
+            </div>
+        </div>
+
+        <div class="store-area">
+            <div class="store-title">업그레이드 센터</div>
+
+            <button class="item-btn" id="item1" onclick="buyItem(1)">
+                <div class="item-info">
+                    <span class="item-name">마우스 광클 연습</span>
+                    <span class="item-desc">클릭 시 +1 Byte 추가</span>
+                    <span class="item-cost">비용: <span id="cost1">20</span> Byte</span>
+                </div>
+                <span class="item-count" id="count1">0</span>
+            </button>
+
+            <button class="item-btn" id="item2" onclick="buyItem(2)">
+                <div class="item-info">
+                    <span class="item-name">신입 사원 투입</span>
+                    <span class="item-desc">초당 +2 Byte 자동 이관</span>
+                    <span class="item-cost">비용: <span id="cost2">100</span> Byte</span>
+                </div>
+                <span class="item-count" id="count2">0</span>
+            </button>
+
+            <button class="item-btn" id="item3" onclick="buyItem(3)">
+                <div class="item-info">
+                    <span class="item-name">Metabase 쿼리 튜닝</span>
+                    <span class="item-desc">클릭 시 +10 Byte 추가</span>
+                    <span class="item-cost">비용: <span id="cost3">500</span> Byte</span>
+                </div>
+                <span class="item-count" id="count3">0</span>
+            </button>
+
+            <button class="item-btn" id="item4" onclick="buyItem(4)">
+                <div class="item-info">
+                    <span class="item-name">로마식 행정 시스템 도입</span>
+                    <span class="item-desc">초당 +50 Byte 자동 이관</span>
+                    <span class="item-cost">비용: <span id="cost4">2500</span> Byte</span>
+                </div>
+                <span class="item-count" id="count4">0</span>
+            </button>
+
+            <button class="item-btn" id="item5" onclick="buyItem(5)">
+                <div class="item-info">
+                    <span class="item-name">9회말 2아웃 역전의 집중력</span>
+                    <span class="item-desc">초당 +300 Byte 자동 이관</span>
+                    <span class="item-cost">비용: <span id="cost5">10000</span> Byte</span>
+                </div>
+                <span class="item-count" id="count5">0</span>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // 게임 데이터 상태
+        let score = 0;
+        let clickPower = 1;
+        let autoPower = 0;
+
+        // 아이템 정보 배열 [비용, 보유수, 클릭증가량, 자동증가량, 비용증가배율]
+        const items = {
+            1: { cost: 20, count: 0, clickInc: 1, autoInc: 0, multiplier: 1.5 },
+            2: { cost: 100, count: 0, clickInc: 0, autoInc: 2, multiplier: 1.6 },
+            3: { cost: 500, count: 0, clickInc: 10, autoInc: 0, multiplier: 1.7 },
+            4: { cost: 2500, count: 0, clickInc: 0, autoInc: 50, multiplier: 1.8 },
+            5: { cost: 10000, count: 0, clickInc: 0, autoInc: 300, multiplier: 2.0 }
+        };
+
+        // UI 요소 가져오기
+        const scoreUI = document.getElementById('score');
+        const clickPowerUI = document.getElementById('clickPowerDisplay');
+        const autoPowerUI = document.getElementById('autoPowerDisplay');
+        const mainBtn = document.getElementById('mainBtn');
+
+        // 숫자 포맷팅 함수 (콤마 찍기)
+        function formatNumber(num) {
+            return Math.floor(num).toLocaleString('ko-KR');
+        }
+
+        // 메인 버튼 클릭 이벤트
+        mainBtn.addEventListener('click', (e) => {
+            score += clickPower;
+            updateUI();
+            createFloatingText(e, `+${formatNumber(clickPower)}`);
+        });
+
+        // 아이템 구매 함수
+        function buyItem(id) {
+            const item = items[id];
+            if (score >= item.cost) {
+                score -= item.cost;
+                item.count++;
+                
+                // 능력치 적용
+                clickPower += item.clickInc;
+                autoPower += item.autoInc;
+                
+                // 다음 구매 비용 증가
+                item.cost = Math.floor(item.cost * item.multiplier);
+                
+                updateUI();
+            }
+        }
+
+        // 초당 자동 상승 로직 (1초마다 실행)
+        setInterval(() => {
+            if (autoPower > 0) {
+                score += autoPower;
+                updateUI();
+            }
+        }, 1000);
+
+        // UI 갱신 (점수, 버튼 활성화/비활성화)
+        function updateUI() {
+            scoreUI.innerText = formatNumber(score);
+            clickPowerUI.innerText = formatNumber(clickPower);
+            autoPowerUI.innerText = formatNumber(autoPower);
+
+            // 각 아이템 버튼 상태 갱신
+            for (let i = 1; i <= 5; i++) {
+                const btn = document.getElementById(`item${i}`);
+                const costUI = document.getElementById(`cost${i}`);
+                const countUI = document.getElementById(`count${i}`);
+                
+                costUI.innerText = formatNumber(items[i].cost);
+                countUI.innerText = items[i].count;
+
+                // 점수가 부족하면 버튼 비활성화
+                if (score < items[i].cost) {
+                    btn.disabled = true;
+                } else {
+                    btn.disabled = false;
+                }
+            }
+        }
+
+        // 클릭 시 마우스 위치에 뜨는 텍스트 이펙트
+        function createFloatingText(e, text) {
+            const floatingText = document.createElement('div');
+            floatingText.classList.add('floating-text');
+            floatingText.innerText = text;
+            
+            // 버튼 안에서의 클릭 좌표 계산
+            const rect = mainBtn.getBoundingClientRect();
+            const x = e.clientX - rect.left + (Math.random() * 20 - 10);
+            const y = e.clientY - rect.top;
+
+            floatingText.style.left = `${e.clientX}px`;
+            floatingText.style.top = `${e.clientY - 20}px`;
+            
+            document.body.appendChild(floatingText);
+
+            // 1초 뒤 요소 삭제
+            setTimeout(() => {
+                floatingText.remove();
+            }, 1000);
+        }
+
+        // 초기 UI 세팅
+        updateUI();
+    </script>
+</body>
+</html>
