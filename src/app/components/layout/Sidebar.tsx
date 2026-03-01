@@ -3,7 +3,8 @@ import { NavLink } from 'react-router';
 import { 
   FileText,
   ChevronRight,
-  ChevronDown
+  ChevronDown,
+  LayoutDashboard
 } from 'lucide-react';
 import { cn } from '../../../lib/utils'; 
 
@@ -70,7 +71,7 @@ const menuGroups = [
 ];
 
 export function Sidebar() {
-  const [openGroups, setOpenGroups] = useState<string[]>(['WMS']);
+  const [openGroups, setOpenGroups] = useState<string[]>([]);
 
   const toggleGroup = (label: string) => {
     if (openGroups.includes(label)) {
@@ -88,6 +89,21 @@ export function Sidebar() {
       
       <div className="flex-1 overflow-y-auto py-4 min-h-0" style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 #1f2937' }}>
         <nav className="space-y-1 px-2">
+          {/* Dashboard link */}
+          <NavLink
+            to="/"
+            end
+            className={({ isActive }) => cn(
+              "group flex items-center rounded-md px-3 py-2.5 text-[13px] font-bold transition-colors",
+              isActive ? "bg-blue-600 text-white" : "text-gray-200 hover:bg-gray-700 hover:text-white"
+            )}
+          >
+            <LayoutDashboard className="mr-2 h-4 w-4 flex-shrink-0" aria-hidden="true" />
+            <span>대시보드</span>
+          </NavLink>
+
+          <div className="border-b border-gray-700 my-2" />
+
           {menuGroups.map((group) => (
             <div key={group.label}>
               <div

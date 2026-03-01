@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>프로젝트 오픈 준비 중</title>
+    <style>
+        /* 기본 배경과 폰트 설정 (터미널 감성) */
+        body {
+            background-color: #0d1117; /* 깊은 다크 네이비/블랙 */
+            color: #00ff41; /* 해커 느낌의 네온 그린 */
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        /* 상단 타이틀 */
+        .title {
+            font-size: 1.5rem;
+            color: #c9d1d9;
+            margin-bottom: 30px;
+            letter-spacing: 2px;
+        }
+
+        /* 카운트다운 영역 컨테이너 */
+        .countdown-container {
+            display: flex;
+            align-items: flex-end;
+            gap: 15px;
+            text-shadow: 0 0 15px rgba(0, 255, 65, 0.5); /* 네온 글로우 효과 */
+        }
+
+        /* 날짜, 시간, 분, 초 단위 */
+        .time-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 110px;
+        }
+
+        .number {
+            font-size: 5rem;
+            font-weight: bold;
+            line-height: 1;
+        }
+
+        .label {
+            font-size: 1rem;
+            color: #8b949e;
+            margin-top: 8px;
+            text-shadow: none;
+            letter-spacing: 1px;
+        }
+
+        /* 밀리초 (빠르게 돌아가는 부분) */
+        .ms-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-bottom: 25px; /* 줄맞춤 */
+        }
+
+        .ms-number {
+            font-size: 2.5rem; /* 초보다 약간 작게 */
+            color: #58a6ff; /* 밀리초만 파란색으로 포인트 */
+            text-shadow: 0 0 10px rgba(88, 166, 255, 0.6);
+        }
+
+        /* 하단 랜덤 메세지 */
+        .status-message {
+            margin-top: 60px;
+            font-size: 1.2rem;
+            color: #ff7b72;
+            min-height: 30px;
+            font-weight: bold;
+            transition: opacity 0.3s;
+        }
+
+        .blink-cursor {
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="title">TARGET DATE: 2027.01.01 00:00:00</div>
+
+    <div class="countdown-container" id="timer">
+        <div class="time-box">
+            <span class="number" id="days">000</span>
+            <span class="label">DAYS</span>
+        </div>
+        <div class="time-box">
+            <span class="number" id="hours">00</span>
+            <span class="label">HOURS</span>
+        </div>
+        <div class="time-box">
+            <span class="number" id="mins">00</span>
+            <span class="label">MINUTES</span>
+        </div>
+        <div class="time-box">
+            <span class="number" id="secs">00</span>
+            <span class="label">SECONDS</span>
+        </div>
+        <div class="ms-box">
+            <span class="ms-number" id="ms">000</span>
+        </div>
+    </div>
+
+    <div class="status-message">
+        > <span id="msg-text">시스템 부팅 중...</span><span class="blink-cursor">_</span>
+    </div>
+
+    <script>
+        // 목표 날짜 설정 (2027년 1월 1일 자정)
+        const targetDate = new Date('2027-01-01T00:00:00').getTime();
+
+        // 랜덤으로 출력될 아무말 대잔치 메세지들
+        const messages = [
+            "개발자가 커피를 수혈받고 있습니다...",
+            "숨어있는 버그와 치열하게 면담 중...",
+            "디자이너가 픽셀을 장인정신으로 깎는 중...",
+            "서버에 시원한 물을 주는 중... (뿌리지 마세요)",
+            "오픈 준비율: (개발자 뇌피셜) 99.9%",
+            "앗, 내가 방금 무슨 코드를 지운 거지?",
+            "기대하셔도 좋습니다. 아마도요.",
+            "데이터베이스를 예쁘게 정리하는 중...",
+            "키보드 샷건 수리 중...",
+            "대표님 몰래 농땡이... 아니 열일 중입니다."
+        ];
+
+        // 타이머 업데이트 함수
+        function updateTimer() {
+            const now = new Date().getTime();
+            const distance = targetDate - now;
+
+            // 목표 날짜가 지났을 때
+            if (distance < 0) {
+                document.getElementById("timer").innerHTML = "<h2 style='font-size:3rem; color:#00ff41;'>🎉 서비스가 오픈되었습니다! 🎉</h2>";
+                return;
+            }
+
+            // 시간 계산
+            const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+            const milliseconds = Math.floor(distance % 1000);
+
+            // 화면에 렌더링 (숫자 앞 빈자리를 0으로 채움)
+            document.getElementById("days").innerText = String(days).padStart(3, '0');
+            document.getElementById("hours").innerText = String(hours).padStart(2, '0');
+            document.getElementById("mins").innerText = String(minutes).padStart(2, '0');
+            document.getElementById("secs").innerText = String(seconds).padStart(2, '0');
+            document.getElementById("ms").innerText = String(milliseconds).padStart(3, '0');
+        }
+
+        // 메세지 변경 함수
+        function changeMessage() {
+            const msgText = document.getElementById("msg-text");
+            // 랜덤으로 메세지 하나 뽑기
+            const randomMsg = messages[Math.floor(Math.random() * messages.length)];
+            msgText.innerText = randomMsg;
+        }
+
+        // 실행 주기 설정
+        // 밀리초가 역동적으로 보이도록 20ms마다 타이머 업데이트
+        setInterval(updateTimer, 20); 
+        
+        // 메세지는 3.5초마다 랜덤하게 변경
+        setInterval(changeMessage, 3500); 
+
+        // 초기 1회 즉시 실행
+        updateTimer();
+        changeMessage();
+    </script>
+</body>
+</html>

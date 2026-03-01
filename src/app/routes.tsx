@@ -41,13 +41,14 @@ import StationeryBookshelfInquiryPage from "./pages/36.StationeryBookshelfInquir
 import ForcedStockInPage from "./pages/37.ForcedStockInPage";
 import StationeryAlbumSalesInquiryPage from "./pages/38.StationeryAlbumSalesInquiryPage";
 import SectionArrivalRegistrationPage from "./pages/39.SectionArrivalRegistrationPage"; // ★ 39번 임포트 추가
+import DashboardPage from "./pages/DashboardPage";
 
 export const router = createBrowserRouter([
   {
     path: "/",
     Component: Layout,
     children: [
-      { index: true, Component: () => <div className="p-8 font-bold text-xl">대시보드 메인</div> },
+      { index: true, Component: DashboardPage },
       { path: "price-change", Component: PriceChangePage },
       { path: "status-change", Component: ProductStatusChangePage },
       { path: "order-standard", Component: OrderStandardManagePage },
