@@ -1,0 +1,448 @@
+/* ═══════════════════════════════════════════════════════════════
+   ERP Common Styles - Based on 17.DomesticArrivalDailyClosingPage
+   All B2B backoffice pages should follow these design tokens.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── Page Root Container ─── */
+.erp-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #fefdfb;
+  padding: 1rem;
+  font-size: 12px;
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  position: relative;
+  overflow: hidden;
+  gap: 1rem; /* gap-4 */
+}
+
+/* ─── Page Title ─── */
+.erp-page-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.erp-page-title::before {
+  content: '';
+  display: block;
+  width: 4px;
+  height: 14px;
+  background-color: #dc2626;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+.erp-page-title h2 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+
+/* ─── Filter / Search Area ─── */
+.erp-filter-box {
+  border: 1px solid #d1d5db;
+  background-color: #fefefe;
+  flex-shrink: 0;
+}
+
+/* ─── Search Area Wrapper (폼 + 버튼 그룹) ─── */
+.erp-search-area {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.erp-search-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ─── Form Grid (조회조건 폼 그리드) ─── */
+/*
+   ★ 통일 규칙: shadow, rounded 적용하지 않음.
+   border + flat background만 사용.
+   모든 페이지의 조회조건/정보입력 폼 그리드에 적용.
+*/
+.erp-form-grid {
+  display: grid;
+  border-bottom: 1px solid #e5e7eb;
+}
+.erp-form-grid:last-child {
+  border-bottom: none;
+}
+
+/* ─── Form Label Cell (폼 라벨 셀) ─── */
+.erp-form-label {
+  background-color: #eef3f8;
+  border-right: 1px solid #e5e7eb;
+  padding: 2px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-size: 12px;
+  font-weight: 700;
+  color: #2563eb;
+  white-space: nowrap;
+  height: 100%;
+}
+.erp-form-label .required {
+  color: #ef4444;
+  margin-left: 4px;
+}
+
+/* ─── Form Input Cell (폼 입력 셀) ─── */
+.erp-form-cell {
+  display: flex;
+  align-items: center;
+  padding: 2px 4px;
+  border-right: 1px solid #e5e7eb;
+  gap: 4px;
+}
+.erp-form-cell:last-child {
+  border-right: none;
+}
+
+/* ─── Filter Label (左 라벨 셀) ─── */
+.erp-label {
+  background-color: #eef3f8;
+  border-right: 1px solid #e5e7eb;
+  padding: 2px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-size: 12px;
+  font-weight: 700;
+  color: #2563eb;
+  white-space: nowrap;
+  height: 100%;
+}
+.erp-label .required {
+  color: #ef4444;
+  margin-left: 4px;
+}
+
+/* ─── Section Group (섹션 제목 + 데이터 컨테이너 간격 최소화) ─── */
+.erp-section-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.erp-section-group > .erp-section-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 4px 3px 4px;
+  flex-shrink: 0;
+}
+
+/* ─── Section Container ─── */
+/* 
+   ★ 통일 규칙: 컨테이너에 shadow, rounded 적용하지 않음.
+   border + flat background만 사용.
+*/
+.erp-section {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+}
+
+/* ─── Section Header Bar ─── */
+/*
+   ★ 통일 규칙: 섹션 제목에 ▶ 마커 사용.
+   배경색/테두리 제거하여 erp-section-toolbar와 동일한 평문 스타일로 통일.
+*/
+.erp-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 4px 3px 4px;
+  flex-shrink: 0;
+}
+.erp-section-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+}
+.erp-section-title::before {
+  content: '';
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-left: 8px solid #111827;
+  border-bottom: 5px solid transparent;
+  margin-right: 2px;
+}
+
+/* ─── Data Grid (Table) Scroll Wrapper ─── */
+.erp-grid-wrapper {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}
+
+/* ─── Sticky Table Header ─── */
+.erp-grid-wrapper thead,
+.erp-grid-wrapper [data-slot="table-header"] {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: #f4f4f4;
+  box-shadow: 0 1px 0 0 #d1d5db;
+}
+
+/* ─── Table Head Cell ─── */
+.erp-grid-wrapper th {
+  text-align: center;
+  font-weight: 700;
+  color: #111827;
+  border-right: 1px solid #d1d5db;
+  padding: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.erp-grid-wrapper th:last-child {
+  border-right: none;
+}
+
+/* ─── Table Body Row ─── */
+.erp-grid-wrapper tbody tr {
+  height: 32px;
+  border-bottom: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: background-color 0.05s;
+}
+.erp-grid-wrapper tbody tr:hover {
+  background-color: rgba(219, 234, 254, 0.3);
+}
+.erp-grid-wrapper tbody tr.selected {
+  background-color: #dbeafe !important;
+}
+
+/* ─── Table Body Cell ─── */
+.erp-grid-wrapper td {
+  padding: 4px;
+  border-right: 1px solid #e5e7eb;
+  font-size: 11px;
+  vertical-align: middle;
+}
+.erp-grid-wrapper td:last-child {
+  border-right: none;
+}
+
+/* ─── Common Button Styles ─── */
+/* Gray header buttons: 초기화(F3), 조회(F4) etc */
+.erp-btn-header {
+  height: 28px;
+  min-width: 80px;
+  padding: 0 12px;
+  background-color: #888888;
+  color: #ffffff;
+  border: none;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background-color 0.1s;
+}
+.erp-btn-header:hover {
+  background-color: #666666;
+}
+
+/* Cyan action buttons: 조회, 마감, 저장, 엑셀다운, 파일등록, 발주의뢰, 재무이관 etc */
+.erp-btn-action {
+  height: 28px;
+  padding: 0 12px;
+  background-color: #00a9ce;
+  color: #ffffff;
+  border: none;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background-color 0.1s;
+}
+.erp-btn-action:hover {
+  background-color: #0098ba;
+}
+
+/* Sub action buttons (smaller, outline) – 일괄적용, 엑셀양식, 보기 etc */
+.erp-btn-sub {
+  height: 24px;
+  padding: 0 12px;
+  background-color: #ffffff;
+  color: #374151;
+  border: 1px solid #9ca3af;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background-color 0.1s;
+}
+.erp-btn-sub:hover {
+  background-color: #f3f4f6;
+}
+
+/* Red danger button – 삭제 (행삭제, 마스터삭제 등) */
+.erp-btn-danger {
+  height: 28px;
+  padding: 0 16px;
+  background-color: #ef4444;
+  color: #ffffff;
+  border: none;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background-color 0.1s;
+}
+.erp-btn-danger:hover {
+  background-color: #dc2626;
+}
+
+/* ─── Date Input ─── */
+.erp-date-input {
+  display: flex;
+  align-items: center;
+  height: 24px;
+  width: 110px;
+  background-color: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.erp-date-input:focus-within {
+  box-shadow: 0 0 0 1px #3b82f6;
+}
+.erp-date-input input[type="text"] {
+  height: 100%;
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 11px;
+  text-align: center;
+  padding: 0 4px;
+  width: 100%;
+  background: transparent;
+}
+.erp-date-input .erp-date-icon {
+  position: relative;
+  width: 24px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f3f4f6;
+  border-left: 1px solid #d1d5db;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.erp-date-input .erp-date-icon:hover {
+  background-color: #e5e7eb;
+}
+.erp-date-input .erp-date-icon input[type="date"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* ─── Form Inputs (ERP size) ─── */
+.erp-input {
+  height: 24px !important;
+  font-size: 11px !important;
+  border-radius: 2px !important;
+  border-color: #d1d5db !important;
+}
+
+/* ─── Select Trigger (ERP size) ─── */
+.erp-select-trigger {
+  height: 24px !important;
+  font-size: 11px !important;
+  border-radius: 2px !important;
+  border-color: #d1d5db !important;
+}
+
+/* ─── Modal / Popup ─── */
+.erp-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.4);
+}
+.erp-modal {
+  background-color: #ffffff;
+  border-radius: 4px;
+  box-shadow: 0 20px 60px -15px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-size: 12px;
+  border: 1px solid #9ca3af;
+}
+.erp-modal-header {
+  background-color: #444444;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  height: 36px;
+  flex-shrink: 0;
+}
+.erp-modal-header span {
+  font-weight: 700;
+  font-size: 13px;
+}
+.erp-modal-footer {
+  border-top: 1px solid #d1d5db;
+  padding: 8px;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  background-color: #f9f9f9;
+  flex-shrink: 0;
+}
+
+/* ─── Custom Scrollbar ─── */
+.custom-scrollbar::-webkit-scrollbar,
+.erp-grid-wrapper::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track,
+.erp-grid-wrapper::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb,
+.erp-grid-wrapper::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.erp-grid-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* ─── Empty row placeholder ─── */
+.erp-empty-row td {
+  height: 80px;
+  text-align: center;
+  color: #9ca3af;
+  background-color: #ffffff;
+  cursor: default;
+}
+.erp-empty-row:hover {
+  background-color: #ffffff !important;
+}
