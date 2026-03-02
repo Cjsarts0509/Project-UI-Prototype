@@ -143,9 +143,7 @@ export function ProjectCountdown() {
       />
 
       {/* Title */}
-      <p className="relative z-10 tracking-[3px] mb-2 text-[16px] font-[Inter]" style={{ color: '#e6edf3', fontWeight: 700 }}>
-        상품관리 통합시스템 구축
-      </p>
+      
       <p className="relative z-10 text-[16px] tracking-[5px] mb-8" style={{ color: '#c9d1d9' }}>
         SYSTEM OPEN: 2027.01.01 00:00:00
       </p>

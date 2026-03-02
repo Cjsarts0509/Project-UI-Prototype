@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router";
+import { createHashRouter } from "react-router";
 import { Layout } from "./components/layout/Layout";
 
 // 1번 ~ 39번 페이지 컴포넌트 임포트 (전체)
@@ -44,7 +44,7 @@ import SectionArrivalRegistrationPage from "./pages/39.SectionArrivalRegistratio
 import DashboardPage from "./pages/DashboardPage";
 import DataMigrationGamePage from "./pages/DataMigrationGamePage";
 
-export const router = createBrowserRouter([
+export const router = createHashRouter([
   {
     path: "/",
     Component: Layout,
