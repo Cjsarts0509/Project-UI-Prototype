@@ -41,6 +41,8 @@ import StationeryBookshelfInquiryPage from "./pages/36.StationeryBookshelfInquir
 import ForcedStockInPage from "./pages/37.ForcedStockInPage";
 import StationeryAlbumSalesInquiryPage from "./pages/38.StationeryAlbumSalesInquiryPage";
 import SectionArrivalRegistrationPage from "./pages/39.SectionArrivalRegistrationPage"; // ★ 39번 임포트 추가
+import StorePartDeductionRegistrationPage from "./pages/40.StorePartDeductionRegistrationPage"; // ★ 40번 점포별 공용알바 공제등록
+import StorePartDeductionConfirmPage from "./pages/41.StorePartDeductionConfirmPage"; // ★ 41번 점포별 공용알바 공제확정
 import DashboardPage from "./pages/DashboardPage";
 import DataMigrationGamePage from "./pages/DataMigrationGamePage";
 
@@ -89,6 +91,8 @@ export const router = createHashRouter([
       { path: "forced-stock-in", Component: ForcedStockInPage },
       { path: "stationery-album-sales-inquiry", Component: StationeryAlbumSalesInquiryPage },
       { path: "section-arrival-registration", Component: SectionArrivalRegistrationPage }, // ★ 39번 라우트 연결
+      { path: "store-part-deduction-registration", Component: StorePartDeductionRegistrationPage }, // ★ 40번
+      { path: "store-part-deduction-confirm", Component: StorePartDeductionConfirmPage }, // ★ 41번
       { path: "easter-egg", Component: DataMigrationGamePage },
       { path: "*", Component: () => <div className="p-8">페이지를 찾을 수 없습니다.</div> }
     ],

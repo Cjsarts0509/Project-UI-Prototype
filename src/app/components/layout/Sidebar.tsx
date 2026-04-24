@@ -45,6 +45,8 @@ const menuGroups = [
       { label: '22. 기간별 판매조회', href: '/periodical-sales' },
       { label: '26. 기획특가프로모션등록(특정)', href: '/special-promo-registration' },
       { label: '27. 점포진열 관리(특정매입)', href: '/store-display-management' },
+      { label: '40. 점포별 공용알바 공제등록', href: '/store-part-deduction-registration' },
+      { label: '41. 점포별 공용알바 공제확정', href: '/store-part-deduction-confirm' },
     ]
   },
   {

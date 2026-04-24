@@ -1,0 +1,513 @@
+import React, { useState, useMemo, useRef } from 'react';
+import * as XLSX from 'xlsx';
+import { Calendar } from 'lucide-react';
+import { MOCK_DEDUCTION_MASTERS, STORE_LIST, DeductionMaster, DeductionSupplier } from '../../data/mockStorePartDeduction';
+import { calcDeduction, TYPE_LABEL, roundWon } from '../../utils/deductionCalc';
+
+type Status = '전체' | '작성중' | '확정';
+type DeductionType = 'N' | 'R' | 'A' | 'E';
+
+const today = () => new Date().toISOString().slice(0, 10);
+const currentYm = () => new Date().toISOString().slice(0, 7);
+const fmtNum = (n: number) => (n || 0).toLocaleString('ko-KR');
+
+export default function StorePartDeductionRegistrationPage() {
+  // ── 1. 조회 영역
+  const [sYearMonth, setSYearMonth] = useState('2026-02');
+  const [sStore, setSStore] = useState('전체');
+  const [sStatus, setSStatus] = useState<Status>('전체');
+
+  // ── 2. 전체 마스터 데이터
+  const [masters, setMasters] = useState<DeductionMaster[]>(MOCK_DEDUCTION_MASTERS);
+  const [filtered, setFiltered] = useState<DeductionMaster[]>(MOCK_DEDUCTION_MASTERS);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [checkedMasters, setCheckedMasters] = useState<string[]>([]);
+
+  // ── 3. 공제정보 입력 폼
+  const [fYearMonth, setFYearMonth] = useState(currentYm());
+  const [fStore, setFStore] = useState('광화문점');
+  const [fLaborCost, setFLaborCost] = useState('');
+
+  // ── 4. 공제매입처 입력 영역
+  const [inpSupplierCode, setInpSupplierCode] = useState('');
+  const [inpSupplierName, setInpSupplierName] = useState('');
+  const [chkType, setChkType] = useState(false);
+  const [inpType, setInpType] = useState<DeductionType>('N');
+  const [chkRate, setChkRate] = useState(false);
+  const [inpRate, setInpRate] = useState('');
+  const [chkAmount, setChkAmount] = useState(false);
+  const [inpAmount, setInpAmount] = useState('');
+
+  // ── 5. 매입처 그리드
+  const [checkedSups, setCheckedSups] = useState<string[]>([]);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ===================== 파생 값 =====================
+  const selected = useMemo(() => masters.find(m => m.id === selectedId) || null, [masters, selectedId]);
+  const rows = useMemo(() => {
+    if (!selected) return [];
+    return calcDeduction(selected.totalLaborCost, selected.suppliers);
+  }, [selected]);
+
+  // ===================== 핸들러: 조회 =====================
+  const handleSearch = () => {
+    const list = masters.filter(m => {
+      if (sYearMonth && m.yearMonth !== sYearMonth) return false;
+      if (sStore !== '전체' && m.storeName !== sStore) return false;
+      if (sStatus !== '전체' && m.status !== sStatus) return false;
+      return true;
+    });
+    setFiltered(list);
+    if (list.length) {
+      setSelectedId(list[0].id);
+      setFYearMonth(list[0].yearMonth);
+      setFStore(list[0].storeName);
+      setFLaborCost(String(list[0].totalLaborCost));
+    }
+  };
+
+  const handleSearchReset = () => {
+    setSYearMonth(currentYm());
+    setSStore('전체');
+    setSStatus('전체');
+    setFiltered(masters);
+  };
+
+  // ===================== 핸들러: 공제정보 =====================
+  const handleFormReset = () => {
+    setFYearMonth(currentYm());
+    setFStore('광화문점');
+    setFLaborCost('');
+    setSelectedId(null);
+  };
+
+  const handleSelectMaster = (m: DeductionMaster) => {
+    setSelectedId(m.id);
+    setFYearMonth(m.yearMonth);
+    setFStore(m.storeName);
+    setFLaborCost(String(m.totalLaborCost));
+  };
+
+  const nextSeq = (ym: string, storeCode: string) => {
+    const ymClean = ym.replace('-', '');
+    const exist = masters.filter(m => m.yearMonth === ym && m.storeCode === storeCode).length;
+    return 'AB' + ymClean + storeCode + String(exist + 1).padStart(5, '0');
+  };
+
+  const handleSaveMaster = () => {
+    if (!fYearMonth || !fStore || !fLaborCost) return alert('정산년월/영업점/총인건비를 입력하세요.');
+    const store = STORE_LIST.find(s => s.name === fStore);
+    if (!store) return alert('유효한 영업점이 아닙니다.');
+    const cost = Number(fLaborCost.replace(/,/g, '')) || 0;
+
+    if (selected && selected.status !== '확정') {
+      // 기존 건 업데이트
+      setMasters(prev => prev.map(m => m.id === selected.id ? { ...m, totalLaborCost: cost } : m));
+      setFiltered(prev => prev.map(m => m.id === selected.id ? { ...m, totalLaborCost: cost } : m));
+      alert('수정되었습니다.');
+    } else {
+      const newId = nextSeq(fYearMonth, store.code);
+      const newMaster: DeductionMaster = {
+        id: newId, yearMonth: fYearMonth, storeCode: store.code, storeName: store.name,
+        totalLaborCost: cost, status: '작성중', finalConfirmed: 'N', ifasSent: 'N', ifasSentDate: '',
+        regDate: today(), regEmpNo: '2024001', regName: '조준수',
+        finalConfirmDate: '', finalConfirmEmpNo: '', finalConfirmName: '', note: '',
+        suppliers: [],
+      };
+      setMasters(prev => [newMaster, ...prev]);
+      setFiltered(prev => [newMaster, ...prev]);
+      setSelectedId(newId);
+      alert(`신규 공제번호 생성: ${newId}`);
+    }
+  };
+
+  const handleRegenerate = () => {
+    if (!selected) return alert('재생성할 공제정보를 선택하세요.');
+    if (selected.status === '확정') return alert('확정된 건은 재생성할 수 없습니다.');
+    if (!confirm('매입처 설정(유형/점유율/공제액)은 유지하고 매출·최종매출·공제액만 초기화합니다.')) return;
+    setMasters(prev => prev.map(m => m.id !== selected.id ? m : ({
+      ...m,
+      suppliers: m.suppliers.map(s => ({ ...s, sales: 0, excludeSales: 0 })),
+    })));
+    setFiltered(prev => prev.map(m => m.id !== selected.id ? m : ({
+      ...m,
+      suppliers: m.suppliers.map(s => ({ ...s, sales: 0, excludeSales: 0 })),
+    })));
+    alert('재생성되었습니다. [매출조회] 또는 [파일등록]을 눌러 매출을 반영하세요.');
+  };
+
+  const handleMasterDelete = () => {
+    if (!checkedMasters.length) return alert('삭제할 공제정보를 선택하세요.');
+    const targets = masters.filter(m => checkedMasters.includes(m.id));
+    if (targets.some(m => m.status === '확정')) return alert('확정된 건은 삭제할 수 없습니다.');
+    if (!confirm(`${targets.length}건을 삭제하시겠습니까?`)) return;
+    setMasters(prev => prev.filter(m => !checkedMasters.includes(m.id)));
+    setFiltered(prev => prev.filter(m => !checkedMasters.includes(m.id)));
+    if (selectedId && checkedMasters.includes(selectedId)) handleFormReset();
+    setCheckedMasters([]);
+  };
+
+  const handleConfirm = () => {
+    if (!selected) return alert('확정할 공제정보를 선택하세요.');
+    if (selected.status === '확정') return alert('이미 확정된 건입니다.');
+    if (!selected.suppliers.length) return alert('매입처 정보가 없습니다.');
+    if (!confirm('확정 후 매입처 정보는 수정·삭제가 불가합니다. 진행하시겠습니까?')) return;
+    setMasters(prev => prev.map(m => m.id !== selected.id ? m : { ...m, status: '확정' as const }));
+    setFiltered(prev => prev.map(m => m.id !== selected.id ? m : { ...m, status: '확정' as const }));
+    alert('확정되었습니다.');
+  };
+
+  // ===================== 핸들러: 매입처 =====================
+  const canEditSuppliers = selected && selected.status !== '확정';
+
+  const handleAddSupplier = () => {
+    if (!canEditSuppliers) return alert('공제정보를 먼저 저장 후 매입처를 추가할 수 있습니다. (확정 건은 불가)');
+    if (!inpSupplierCode) return alert('매입처코드를 입력하세요.');
+    if (selected!.suppliers.some(s => s.code === inpSupplierCode)) return alert('이미 등록된 매입처입니다.');
+    const newSup: DeductionSupplier = {
+      code: inpSupplierCode, name: inpSupplierName || `매입처-${inpSupplierCode}`,
+      itemCode: 'IC' + inpSupplierCode.slice(-4) + '00', itemName: `${inpSupplierName || '매입처'} 기본품목`,
+      type: 'N', sales: 0, excludeSales: 0,
+    };
+    setMasters(prev => prev.map(m => m.id !== selected!.id ? m : { ...m, suppliers: [...m.suppliers, newSup] }));
+    setFiltered(prev => prev.map(m => m.id !== selected!.id ? m : { ...m, suppliers: [...m.suppliers, newSup] }));
+    setInpSupplierCode(''); setInpSupplierName('');
+  };
+
+  const handleBulkApply = () => {
+    if (!canEditSuppliers || !checkedSups.length) return alert('적용할 매입처를 선택하세요.');
+    const rate = Number(inpRate) / 100;
+    const amount = Number(inpAmount.replace(/,/g, '')) || 0;
+    setMasters(prev => prev.map(m => m.id !== selected!.id ? m : {
+      ...m,
+      suppliers: m.suppliers.map(s => {
+        if (!checkedSups.includes(s.code)) return s;
+        const upd: DeductionSupplier = { ...s };
+        if (chkType) upd.type = inpType;
+        if (chkRate && upd.type === 'R') upd.fixedRate = rate;
+        if (chkAmount && upd.type === 'A') upd.fixedAmount = amount;
+        return upd;
+      }),
+    }));
+    setFiltered(prev => prev.map(m => m.id !== selected!.id ? m : {
+      ...m,
+      suppliers: m.suppliers.map(s => {
+        if (!checkedSups.includes(s.code)) return s;
+        const upd: DeductionSupplier = { ...s };
+        if (chkType) upd.type = inpType;
+        if (chkRate && upd.type === 'R') upd.fixedRate = rate;
+        if (chkAmount && upd.type === 'A') upd.fixedAmount = amount;
+        return upd;
+      }),
+    }));
+    alert(`${checkedSups.length}건 일괄적용 완료.`);
+  };
+
+  const handleQuerySales = () => {
+    if (!canEditSuppliers) return;
+    if (!confirm('정산년월 기준 전월 매출을 DW에서 일괄 조회하여 매출금액 컬럼에 반영합니다. (기존 매출제외금액은 유지)')) return;
+    setMasters(prev => prev.map(m => m.id !== selected!.id ? m : {
+      ...m,
+      suppliers: m.suppliers.map(s => ({ ...s, sales: s.sales || Math.floor(Math.random() * 5000000 + 100000) })),
+    }));
+    setFiltered(prev => prev.map(m => m.id !== selected!.id ? m : {
+      ...m,
+      suppliers: m.suppliers.map(s => ({ ...s, sales: s.sales || Math.floor(Math.random() * 5000000 + 100000) })),
+    }));
+    alert('매출이 반영되었습니다.');
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !canEditSuppliers) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const wb = XLSX.read(evt.target?.result, { type: 'binary' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
+        const newSups: DeductionSupplier[] = [];
+        data.forEach(r => {
+          if (!r || r.length < 2) return;
+          const codeRaw = String(r[0] || '').trim();
+          const name = String(r[1] || '').trim();
+          const sales = Number(r[2]) || 0;
+          if (!codeRaw || !/^\d+$/.test(codeRaw.replace(/\D/g, ''))) return;
+          const code = codeRaw.replace(/\D/g, '').padStart(7, '0');
+          if (selected!.suppliers.some(s => s.code === code) || newSups.some(s => s.code === code)) return;
+          newSups.push({
+            code, name: name || `매입처-${code}`,
+            itemCode: 'IC' + code.slice(-4) + '00',
+            itemName: `${name} 기본품목`,
+            type: 'N', sales, excludeSales: 0,
+          });
+        });
+        setMasters(prev => prev.map(m => m.id !== selected!.id ? m : { ...m, suppliers: [...m.suppliers, ...newSups] }));
+        setFiltered(prev => prev.map(m => m.id !== selected!.id ? m : { ...m, suppliers: [...m.suppliers, ...newSups] }));
+        alert(`${newSups.length}건 등록.`);
+      } catch { alert('엑셀 파일 파싱 실패.'); }
+      finally { if (fileInputRef.current) fileInputRef.current.value = ''; }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleSupReset = () => {
+    setInpSupplierCode(''); setInpSupplierName('');
+    setChkType(false); setChkRate(false); setChkAmount(false);
+    setInpType('N'); setInpRate(''); setInpAmount('');
+  };
+
+  const handleExcelDown = () => {
+    if (!rows.length) return alert('다운로드할 내역이 없습니다.');
+    const data = rows.map((r, i) => ({
+      순번: i + 1, 매입처코드: r.code, 매입처명: r.name,
+      매입처품목코드: r.itemCode, 매입처품목코드명: r.itemName,
+      유형: TYPE_LABEL[r.type], 매출금액: r.sales, 매출제외금액: r.excludeSales,
+      최종매출금액: r.finalSales, '점유율(%)': r.ratePct.toFixed(4), 공제액: r.deduction,
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '매입처공제');
+    XLSX.writeFile(wb, `${selected!.storeName}_${selected!.yearMonth}_공제매입처.xlsx`);
+  };
+
+  const handleSupSave = () => {
+    if (!canEditSuppliers) return;
+    alert('매입처 변경사항이 저장되었습니다.');
+  };
+
+  const handleSupDelete = () => {
+    if (!canEditSuppliers || !checkedSups.length) return alert('삭제할 매입처를 선택하세요.');
+    if (!confirm(`${checkedSups.length}건을 삭제하시겠습니까?`)) return;
+    setMasters(prev => prev.map(m => m.id !== selected!.id ? m : { ...m, suppliers: m.suppliers.filter(s => !checkedSups.includes(s.code)) }));
+    setFiltered(prev => prev.map(m => m.id !== selected!.id ? m : { ...m, suppliers: m.suppliers.filter(s => !checkedSups.includes(s.code)) }));
+    setCheckedSups([]);
+  };
+
+  // ===================== 렌더 =====================
+  const allMasterChecked = filtered.length > 0 && filtered.every(m => checkedMasters.includes(m.id));
+  const allSupChecked = rows.length > 0 && rows.every(r => checkedSups.includes(r.code));
+
+  return (
+    <div className="erp-page">
+      <div className="erp-page-title"><h2>점포별 공용알바 공제등록</h2></div>
+
+      {/* ── 1. 조회 영역 ── */}
+      <div className="erp-filter-box">
+        <div className="erp-form-grid" style={{ gridTemplateColumns: '90px 140px 90px 140px 90px 140px 1fr' }}>
+          <div className="erp-form-label">정산년월<span className="required">*</span></div>
+          <div className="erp-form-cell">
+            <input type="month" className="erp-input" style={{ width: '100%' }} value={sYearMonth} onChange={e => setSYearMonth(e.target.value)} />
+          </div>
+          <div className="erp-form-label">영업점</div>
+          <div className="erp-form-cell">
+            <select className="erp-select-trigger" style={{ width: '100%' }} value={sStore} onChange={e => setSStore(e.target.value)}>
+              <option>전체</option>
+              {STORE_LIST.map(s => <option key={s.code}>{s.name}</option>)}
+            </select>
+          </div>
+          <div className="erp-form-label">진행상태<span className="required">*</span></div>
+          <div className="erp-form-cell">
+            <select className="erp-select-trigger" style={{ width: '100%' }} value={sStatus} onChange={e => setSStatus(e.target.value as Status)}>
+              <option>전체</option><option>작성중</option><option>확정</option>
+            </select>
+          </div>
+          <div className="erp-form-cell" style={{ justifyContent: 'flex-end', gap: 4, paddingRight: 8 }}>
+            <button className="erp-btn-action" onClick={handleSearch}>조회</button>
+            <button className="erp-btn-header" onClick={handleSearchReset}>초기화</button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── 2. 공제정보 영역 ── */}
+      <div className="erp-section-group">
+        <div className="erp-section-header">
+          <div className="erp-section-title">점포별 공용알바 공제정보</div>
+        </div>
+        <div className="erp-section">
+          <div className="erp-form-grid" style={{ gridTemplateColumns: '90px 140px 90px 140px 90px 160px 1fr' }}>
+            <div className="erp-form-label">정산년월<span className="required">*</span></div>
+            <div className="erp-form-cell">
+              <input type="month" className="erp-input" style={{ width: '100%' }} value={fYearMonth} onChange={e => setFYearMonth(e.target.value)} disabled={!!selected && selected.status === '확정'} />
+            </div>
+            <div className="erp-form-label">영업점<span className="required">*</span></div>
+            <div className="erp-form-cell">
+              <select className="erp-select-trigger" style={{ width: '100%' }} value={fStore} onChange={e => setFStore(e.target.value)} disabled={!!selected && selected.status === '확정'}>
+                {STORE_LIST.map(s => <option key={s.code}>{s.name}</option>)}
+              </select>
+            </div>
+            <div className="erp-form-label">총인건비<span className="required">*</span></div>
+            <div className="erp-form-cell">
+              <input type="text" className="erp-input" style={{ width: '100%', textAlign: 'right' }} value={fLaborCost ? fmtNum(Number(fLaborCost.replace(/,/g,''))) : ''} onChange={e => setFLaborCost(e.target.value.replace(/[^\d]/g, ''))} disabled={!!selected && selected.status === '확정'} />
+            </div>
+            <div className="erp-form-cell" style={{ justifyContent: 'flex-end', gap: 4, paddingRight: 8 }}>
+              <button className="erp-btn-header" onClick={handleFormReset}>초기화</button>
+              <button className="erp-btn-action" onClick={handleSaveMaster}>저장</button>
+              <button className="erp-btn-action" onClick={handleRegenerate}>재생성</button>
+              <button className="erp-btn-danger" onClick={handleMasterDelete}>삭제</button>
+              <button className="erp-btn-action" onClick={handleConfirm}>확정</button>
+            </div>
+          </div>
+        </div>
+
+        {/* ── 3. 공제정보 그리드 ── */}
+        <div className="erp-section" style={{ marginTop: 4 }}>
+          <div className="erp-grid-wrapper" style={{ maxHeight: 180 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={{ width: 36 }}>
+                    <input type="checkbox" checked={allMasterChecked} onChange={e => setCheckedMasters(e.target.checked ? filtered.map(m => m.id) : [])} />
+                  </th>
+                  <th>공용알바공제번호</th>
+                  <th style={{ width: 90 }}>정산년월</th>
+                  <th style={{ width: 110 }}>영업점</th>
+                  <th>총인건비</th>
+                  <th style={{ width: 80 }}>진행상태</th>
+                  <th style={{ width: 100 }}>정산등록일</th>
+                  <th style={{ width: 100 }}>정산등록사번</th>
+                  <th style={{ width: 110 }}>정산등록자명</th>
+                  <th>비고</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.length === 0 ? (
+                  <tr className="erp-empty-row"><td colSpan={10}>조회된 데이터가 없습니다.</td></tr>
+                ) : filtered.map(m => (
+                  <tr key={m.id} className={selectedId === m.id ? 'selected' : ''} onClick={() => handleSelectMaster(m)}>
+                    <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                      <input type="checkbox" checked={checkedMasters.includes(m.id)} onChange={e => setCheckedMasters(p => e.target.checked ? [...p, m.id] : p.filter(x => x !== m.id))} />
+                    </td>
+                    <td style={{ textAlign: 'center' }}>{m.id}</td>
+                    <td style={{ textAlign: 'center' }}>{m.yearMonth}</td>
+                    <td style={{ textAlign: 'center' }}>{m.storeName}</td>
+                    <td style={{ textAlign: 'right' }}>{fmtNum(m.totalLaborCost)}</td>
+                    <td style={{ textAlign: 'center', color: m.status === '확정' ? '#dc2626' : '#2563eb' }}>{m.status}</td>
+                    <td style={{ textAlign: 'center' }}>{m.regDate}</td>
+                    <td style={{ textAlign: 'center' }}>{m.regEmpNo}</td>
+                    <td style={{ textAlign: 'center' }}>{m.regName}</td>
+                    <td>{m.note}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* ── 4. 공제매입처정보 영역 ── */}
+      <div className="erp-section-group" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <div className="erp-section-header">
+          <div className="erp-section-title">점포별 공용알바 공제매입처정보</div>
+        </div>
+        <div className="erp-section" style={{ marginBottom: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 6, flexWrap: 'wrap' }}>
+            <span className="erp-label" style={{ border: '1px solid #e5e7eb' }}>매입처코드</span>
+            <input className="erp-input" style={{ width: 90 }} value={inpSupplierCode} onChange={e => setInpSupplierCode(e.target.value)} placeholder="코드" />
+            <input className="erp-input" style={{ width: 160 }} value={inpSupplierName} onChange={e => setInpSupplierName(e.target.value)} placeholder="매입처명 (enter로 추가)" onKeyDown={e => e.key === 'Enter' && handleAddSupplier()} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input type="checkbox" checked={chkType} onChange={e => setChkType(e.target.checked)} />
+              <span style={{ fontSize: 11 }}>공제유형</span>
+            </label>
+            <select className="erp-select-trigger" style={{ width: 110 }} value={inpType} onChange={e => setInpType(e.target.value as DeductionType)} disabled={!chkType}>
+              <option value="N">일반</option><option value="R">고정점유율</option><option value="A">고정공제</option><option value="E">제외</option>
+            </select>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input type="checkbox" checked={chkRate} onChange={e => setChkRate(e.target.checked)} />
+              <span style={{ fontSize: 11 }}>점유율</span>
+            </label>
+            <input className="erp-input" style={{ width: 70 }} value={inpRate} onChange={e => setInpRate(e.target.value.replace(/[^\d.]/g, ''))} disabled={!chkRate || inpType !== 'R'} />
+            <span style={{ fontSize: 11 }}>%</span>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input type="checkbox" checked={chkAmount} onChange={e => setChkAmount(e.target.checked)} />
+              <span style={{ fontSize: 11 }}>공제액</span>
+            </label>
+            <input className="erp-input" style={{ width: 110, textAlign: 'right' }} value={inpAmount ? fmtNum(Number(inpAmount.replace(/,/g,''))) : ''} onChange={e => setInpAmount(e.target.value.replace(/[^\d]/g,''))} disabled={!chkAmount || inpType !== 'A'} />
+            <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+              <button className="erp-btn-action" onClick={handleBulkApply}>일괄적용</button>
+              <button className="erp-btn-action" onClick={handleQuerySales}>매출조회</button>
+              <button className="erp-btn-action" onClick={() => fileInputRef.current?.click()}>파일등록</button>
+              <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept=".xlsx,.xls" onChange={handleFileUpload} />
+              <button className="erp-btn-header" onClick={handleSupReset}>초기화</button>
+              <button className="erp-btn-action" onClick={handleExcelDown}>엑셀다운</button>
+              <button className="erp-btn-action" onClick={handleSupSave}>저장</button>
+              <button className="erp-btn-danger" onClick={handleSupDelete}>삭제</button>
+            </div>
+          </div>
+        </div>
+
+        {/* ── 5. 매입처 그리드 ── */}
+        <div className="erp-section" style={{ flex: 1, minHeight: 0 }}>
+          <div className="erp-grid-wrapper">
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1600 }}>
+              <thead>
+                <tr>
+                  <th style={{ width: 36 }}>
+                    <input type="checkbox" checked={allSupChecked} onChange={e => setCheckedSups(e.target.checked ? rows.map(r => r.code) : [])} />
+                  </th>
+                  <th style={{ width: 44 }}>순번</th>
+                  <th style={{ width: 90 }}>매입처코드</th>
+                  <th style={{ width: 160 }}>매입처명</th>
+                  <th style={{ width: 110 }}>매입처품목코드</th>
+                  <th style={{ width: 180 }}>매입처품목코드명</th>
+                  <th style={{ width: 90 }}>유형</th>
+                  <th style={{ width: 110 }}>매출금액</th>
+                  <th style={{ width: 110 }}>매출제외금액</th>
+                  <th style={{ width: 110 }}>최종매출금액</th>
+                  <th style={{ width: 80 }}>점유율(%)</th>
+                  <th style={{ width: 110 }}>공제액</th>
+                  <th style={{ width: 70 }}>진행상태</th>
+                  <th style={{ width: 90 }}>등록일</th>
+                  <th style={{ width: 80 }}>등록사번</th>
+                  <th style={{ width: 90 }}>등록자명</th>
+                  <th style={{ width: 90 }}>수정일</th>
+                  <th style={{ width: 80 }}>수정사번</th>
+                  <th style={{ width: 90 }}>수정자명</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.length === 0 ? (
+                  <tr className="erp-empty-row"><td colSpan={19}>{selected ? '매입처를 추가하거나 [파일등록] / [매출조회] 로 생성하세요.' : '공제정보를 먼저 선택/생성하세요.'}</td></tr>
+                ) : rows.map((r, i) => (
+                  <tr key={r.code}>
+                    <td style={{ textAlign: 'center' }}>
+                      <input type="checkbox" checked={checkedSups.includes(r.code)} onChange={e => setCheckedSups(p => e.target.checked ? [...p, r.code] : p.filter(x => x !== r.code))} />
+                    </td>
+                    <td style={{ textAlign: 'center' }}>{i + 1}</td>
+                    <td style={{ textAlign: 'center' }}>{r.code}</td>
+                    <td>{r.name}</td>
+                    <td style={{ textAlign: 'center' }}>{r.itemCode}</td>
+                    <td>{r.itemName}</td>
+                    <td style={{ textAlign: 'center' }}>{TYPE_LABEL[r.type]}{r.type === 'R' && r.fixedRate ? ` (${(r.fixedRate * 100).toFixed(1)}%)` : ''}{r.type === 'A' && r.fixedAmount ? ` (${fmtNum(r.fixedAmount)})` : ''}</td>
+                    <td style={{ textAlign: 'right' }}>{fmtNum(r.sales)}</td>
+                    <td style={{ textAlign: 'right' }}>{fmtNum(r.excludeSales)}</td>
+                    <td style={{ textAlign: 'right' }}>{fmtNum(r.finalSales)}</td>
+                    <td style={{ textAlign: 'right' }}>{r.ratePct > 0 ? r.ratePct.toFixed(4) : '-'}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 700 }}>{r.type === 'E' ? '-' : fmtNum(r.deduction)}</td>
+                    <td style={{ textAlign: 'center' }}>{selected?.status}</td>
+                    <td style={{ textAlign: 'center' }}>{selected?.regDate}</td>
+                    <td style={{ textAlign: 'center' }}>{selected?.regEmpNo}</td>
+                    <td style={{ textAlign: 'center' }}>{selected?.regName}</td>
+                    <td></td><td></td><td></td>
+                  </tr>
+                ))}
+                {rows.length > 0 && (
+                  <tr style={{ backgroundColor: '#f3f4f6', fontWeight: 700 }}>
+                    <td colSpan={7} style={{ textAlign: 'center' }}>합계</td>
+                    <td style={{ textAlign: 'right' }}>{fmtNum(rows.reduce((a, r) => a + r.sales, 0))}</td>
+                    <td style={{ textAlign: 'right' }}>{fmtNum(rows.reduce((a, r) => a + r.excludeSales, 0))}</td>
+                    <td style={{ textAlign: 'right' }}>{fmtNum(rows.reduce((a, r) => a + r.finalSales, 0))}</td>
+                    <td></td>
+                    <td style={{ textAlign: 'right' }}>{fmtNum(rows.reduce((a, r) => a + (r.type === 'E' ? 0 : r.deduction), 0))}</td>
+                    <td colSpan={7}></td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
