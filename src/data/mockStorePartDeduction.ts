@@ -255,3 +255,191 @@ export const STORE_LIST = [
   { code: '014', name: '대전점' },
   { code: '015', name: '천안점' },
 ];
+
+// ============================================================================
+// 🔒 백엔드 시뮬레이션 영역 (프론트엔드 UI에 직접 노출되지 않음)
+// ----------------------------------------------------------------------------
+// 실제 운영에서는 DW에서 점포별 매입처 매출을 조회하는 서버 API에 해당.
+// 화면에서는 아래 getter 함수들만 호출 (getStoreSupplierCodes / getStoreSupplierSales 등)
+// ============================================================================
+
+/**
+ * 매입처 마스터 정보 (백엔드 DB의 매입처 테이블 역할)
+ * - 공용알바 공제 대상 매입처 (문구/음반/특정매입/해외문구 포함)
+ * - itemCode는 매입처품목코드 (기본 품목 기준)
+ */
+interface SupplierMaster {
+  code: string;
+  name: string;
+  itemCode: string;
+  itemName: string;
+}
+
+const SUPPLIER_MASTER: SupplierMaster[] = [
+  // 문구 (categoryCode='8')
+  { code: '0803741', name: 'BST', itemCode: 'IC003841', itemName: 'BST 대표상품' },
+  { code: '0803791', name: '공장', itemCode: 'IC003891', itemName: '공장 일반' },
+  { code: '0816555', name: '냐냐온 스튜디오', itemCode: 'IC006655', itemName: '냐냐온 스튜디오 문구행사' },
+  { code: '0817528', name: '누크코퍼레이션', itemCode: 'IC007628', itemName: '누크코퍼레이션 PB' },
+  { code: '0807485', name: '대시앤도트', itemCode: 'IC007585', itemName: '대시앤도트 기획전' },
+  { code: '0817625', name: '대인커머스', itemCode: 'IC007725', itemName: '대인커머스 정품' },
+  { code: '0816903', name: '더시호', itemCode: 'IC007003', itemName: '더시호 특가' },
+  { code: '0818620', name: '더토브', itemCode: 'IC008720', itemName: '더토브 증정' },
+  { code: '0817225', name: '도혜드로잉', itemCode: 'IC007325', itemName: '도혜드로잉 리미티드' },
+  { code: '0810456', name: '디앤에프조이필', itemCode: 'IC000556', itemName: '디앤에프조이필 베이직' },
+  { code: '0803503', name: '로마네', itemCode: 'IC003603', itemName: '로마네 PB' },
+  { code: '0816525', name: '루카랩컴퍼니', itemCode: 'IC006625', itemName: '루카랩컴퍼니 기획전' },
+  { code: '0812988', name: '모트모트', itemCode: 'IC003088', itemName: '모트모트 증정' },
+  { code: '0811795', name: '베르제마넷', itemCode: 'IC001895', itemName: '베르제마넷 대표상품' },
+  { code: '0817604', name: '비온뒤', itemCode: 'IC007704', itemName: '비온뒤 일반' },
+  { code: '0803289', name: '솜씨스템프', itemCode: 'IC003389', itemName: '솜씨스템프 PB' },
+  { code: '0803222', name: '아르디움', itemCode: 'IC003322', itemName: '아르디움 특가' },
+  { code: '0803186', name: '아이코닉', itemCode: 'IC003286', itemName: '아이코닉 리미티드' },
+  { code: '0803159', name: '안테나샵', itemCode: 'IC003259', itemName: '안테나샵 베이직' },
+  { code: '0803303', name: '이투컬렉션', itemCode: 'IC003403', itemName: '이투컬렉션 PB' },
+  { code: '0803690', name: '인디고', itemCode: 'IC003790', itemName: '인디고 기획전' },
+  { code: '0803825', name: '정인통상', itemCode: 'IC003925', itemName: '정인통상 정품' },
+  { code: '0803187', name: '칠삼이일디자인', itemCode: 'IC003287', itemName: '칠삼이일디자인 증정' },
+  { code: '0811513', name: '캘리엠', itemCode: 'IC001613', itemName: '캘리엠 리미티드' },
+  { code: '0810588', name: '케이디코퍼레이션', itemCode: 'IC000688', itemName: '케이디코퍼레이션 대표상품' },
+  { code: '0818036', name: '페펜스튜디오', itemCode: 'IC008136', itemName: '페펜스튜디오 PB' },
+  { code: '0803267', name: '플레플레', itemCode: 'IC003367', itemName: '플레플레 기획전' },
+  { code: '0807497', name: '학산문화사', itemCode: 'IC007597', itemName: '학산문화사 정품' },
+  { code: '0817135', name: '해피썬', itemCode: 'IC007235', itemName: '해피썬 특가' },
+  { code: '0803144', name: '씨케이세일즈', itemCode: 'IC003244', itemName: '씨케이세일즈 대표상품' },
+  { code: '0803527', name: '프론티어통상', itemCode: 'IC003627', itemName: '프론티어통상 일반' },
+  { code: '0803255', name: '모닝글로리', itemCode: 'IC003355', itemName: '모닝글로리 문구행사' },
+  { code: '0803158', name: '바이풀디자인', itemCode: 'IC003258', itemName: '바이풀디자인 증정' },
+  { code: '0816796', name: '마이누', itemCode: 'IC006896', itemName: '마이누 리미티드' },
+  { code: '0816312', name: '엠젯패밀리', itemCode: 'IC006412', itemName: '엠젯패밀리 대표상품' },
+  { code: '0806798', name: '이가라인유통', itemCode: 'IC006898', itemName: '이가라인유통 PB' },
+  { code: '0816166', name: '해밀', itemCode: 'IC006266', itemName: '해밀 특가' },
+  { code: '0807481', name: '골드디자인', itemCode: 'IC007581', itemName: '골드디자인 증정' },
+  { code: '0800334', name: '아이비스코리아', itemCode: 'IC000434', itemName: '아이비스코리아 PB' },
+  { code: '0803080', name: '위드에버상사', itemCode: 'IC003180', itemName: '위드에버상사 대표상품' },
+
+  // 음반/영상 (categoryCode='B')
+  { code: '01B0470', name: '드림어스컴퍼니', itemCode: 'IB014700', itemName: '드림어스컴퍼니 음반' },
+  { code: '01B0478', name: '와이지플러스', itemCode: 'IB014780', itemName: '와이지플러스 음반' },
+  { code: '01B0504', name: '카카오엔터테인먼트', itemCode: 'IB015040', itemName: '카카오엔터 음반' },
+
+  // 특정매입 (categoryCode='6')
+  { code: '0803124', name: '아톰상사(특정매입)', itemCode: 'IC031240', itemName: '아톰상사 APICA' },
+  { code: '0803833', name: '모나미(특정매입)', itemCode: 'IC038330', itemName: '모나미 특정' },
+
+  // 해외문구
+  { code: '0900216', name: 'LEUCHTTURM', itemCode: 'IC902160', itemName: 'LEUCHTTURM 기본' },
+  { code: '0900224', name: 'LIHIT LAB.,INC', itemCode: 'IC902240', itemName: 'LIHIT LAB 기본' },
+  { code: '0900252', name: 'HIGHTIDE CO.,LTD', itemCode: 'IC902520', itemName: 'HIGHTIDE 기본' },
+];
+
+/**
+ * 점포별 매입처 코드 리스트 (핵심 5개 점포)
+ * - 모든 점포가 공통 매입처 풀에서 동일한 코드를 갖되,
+ *   백엔드 매출 시뮬레이션을 위해 점포별로 명시적으로 관리.
+ * - 실제로는 DW에서 "해당 점포에서 매출이 발생한 매입처"를 조회.
+ * - 프론트엔드 UI에는 직접 노출되지 않음 (모달 필터링 용도로만 사용).
+ */
+const STORE_SUPPLIER_CODES_MAP: Record<string, string[]> = {
+  '001': SUPPLIER_MASTER.map(s => s.code), // 광화문점 - 전체
+  '002': SUPPLIER_MASTER.map(s => s.code), // 강남점 - 전체
+  '003': SUPPLIER_MASTER.map(s => s.code), // 잠실점 - 전체
+  '009': SUPPLIER_MASTER.map(s => s.code), // 부산점 - 전체
+  '012': SUPPLIER_MASTER.map(s => s.code), // 창원점 - 전체
+};
+
+/**
+ * 공용알바 공제 대상 점포 목록
+ */
+export const DEDUCTION_TARGET_STORES = ['001', '002', '003', '009', '012'];
+
+/**
+ * 점포×매입처 매출 매트릭스 (백엔드 시뮬레이션)
+ * - 실제로는 DW의 매출 팩트 테이블 조회 쿼리 결과에 해당
+ * - 점포별로 매입처마다 서로 다른 매출/매출제외 값 보유
+ */
+interface StoreSupplierSales {
+  sales: number;
+  excludeSales: number;
+}
+
+// 결정적(deterministic) 해시 기반 매출 생성 — 같은 입력이면 항상 같은 값
+function hashSales(storeCode: string, supplierCode: string, base: number, variance: number): number {
+  let h = 0;
+  const s = storeCode + ':' + supplierCode;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  }
+  const pct = (Math.abs(h) % 10000) / 10000; // 0 ~ 0.9999
+  // 1만원 단위로 반올림
+  const raw = base + (pct * variance * 2 - variance);
+  return Math.max(0, Math.round(raw / 10000) * 10000);
+}
+
+const STORE_SUPPLIER_SALES_MAP: Record<string, Record<string, StoreSupplierSales>> = (() => {
+  const map: Record<string, Record<string, StoreSupplierSales>> = {};
+  DEDUCTION_TARGET_STORES.forEach(storeCode => {
+    map[storeCode] = {};
+    // 점포별 매출 규모 — 광화문(큰점) > 강남 > 부산 > 잠실 > 창원(작은점)
+    const scale: Record<string, number> = {
+      '001': 1.0,
+      '002': 0.75,
+      '009': 0.55,
+      '003': 0.45,
+      '012': 0.30,
+    };
+    const s = scale[storeCode] ?? 0.5;
+    (STORE_SUPPLIER_CODES_MAP[storeCode] || []).forEach(code => {
+      const base = 3_000_000 * s;
+      const variance = 2_500_000 * s;
+      const sales = hashSales(storeCode, code, base, variance);
+      // 일부 매입처만 매출제외 (약 10%)
+      const exHash = (code.charCodeAt(code.length - 1) + storeCode.charCodeAt(2)) % 10;
+      const excludeSales = exHash === 0 ? Math.round(sales * 0.15 / 10000) * 10000 : 0;
+      map[storeCode][code] = { sales, excludeSales };
+    });
+  });
+  return map;
+})();
+
+/**
+ * [백엔드 API 시뮬레이션] 점포에 등록된 매입처 코드 리스트 조회
+ * - 실제: GET /api/deduction/stores/{storeCode}/suppliers
+ */
+export function getStoreSupplierCodes(storeCode: string): string[] {
+  return STORE_SUPPLIER_CODES_MAP[storeCode] || [];
+}
+
+/**
+ * [백엔드 API 시뮬레이션] 특정 점포 + 매입처의 매출/매출제외 조회
+ * - 실제: GET /api/deduction/stores/{storeCode}/suppliers/{supplierCode}/sales?yearMonth=YYYY-MM
+ * - 등록되지 않은 매입처인 경우 null 반환
+ */
+export function getStoreSupplierSales(
+  storeCode: string,
+  supplierCode: string
+): { sales: number; excludeSales: number } | null {
+  return STORE_SUPPLIER_SALES_MAP[storeCode]?.[supplierCode] || null;
+}
+
+/**
+ * [백엔드 API 시뮬레이션] 점포의 전체 매입처 매출 일괄 조회
+ * - 실제: [매출조회] 버튼 클릭 시 호출되는 API
+ * - 기존 등록된 매입처들의 매출을 DW에서 일괄 조회하여 반영
+ */
+export function getAllStoreSupplierSales(
+  storeCode: string
+): Record<string, { sales: number; excludeSales: number }> {
+  return STORE_SUPPLIER_SALES_MAP[storeCode] || {};
+}
+
+/**
+ * [백엔드 API 시뮬레이션] 매입처코드로 매입처 마스터 정보 조회
+ * - 실제: GET /api/suppliers/{supplierCode}
+ * - 존재하지 않으면 null
+ */
+export function getSupplierMaster(
+  supplierCode: string
+): { code: string; name: string; itemCode: string; itemName: string } | null {
+  return SUPPLIER_MASTER.find(s => s.code === supplierCode) || null;
+}

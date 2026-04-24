@@ -1,8 +1,18 @@
 import React, { useState, useMemo, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { Calendar } from 'lucide-react';
-import { MOCK_DEDUCTION_MASTERS, STORE_LIST, DeductionMaster, DeductionSupplier } from '../../data/mockStorePartDeduction';
+import {
+  MOCK_DEDUCTION_MASTERS,
+  STORE_LIST,
+  DeductionMaster,
+  DeductionSupplier,
+  getStoreSupplierCodes,
+  getStoreSupplierSales,
+  getAllStoreSupplierSales,
+  getSupplierMaster,
+} from '../../data/mockStorePartDeduction';
 import { calcDeduction, TYPE_LABEL, roundWon } from '../../utils/deductionCalc';
+import { SupplierSearchModal } from '../components/SupplierSearchModal';
 
 type Status = '전체' | '작성중' | '확정';
 type DeductionType = 'N' | 'R' | 'A' | 'E';
@@ -41,6 +51,9 @@ export default function StorePartDeductionRegistrationPage() {
   // ── 5. 매입처 그리드
   const [checkedSups, setCheckedSups] = useState<string[]>([]);
 
+  // ── 6. 매입처 조회 모달
+  const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ===================== 파생 값 =====================
@@ -49,6 +62,19 @@ export default function StorePartDeductionRegistrationPage() {
     if (!selected) return [];
     return calcDeduction(selected.totalLaborCost, selected.suppliers);
   }, [selected]);
+
+  // 현재 선택된 영업점의 매입처 코드 리스트 (모달 필터링용)
+  // — 선택된 마스터가 있으면 그 점포의 매입처, 없으면 입력 폼의 영업점 기준
+  const currentStoreCode = useMemo(() => {
+    if (selected) return selected.storeCode;
+    const st = STORE_LIST.find(s => s.name === fStore);
+    return st?.code || '';
+  }, [selected, fStore]);
+
+  const allowedSupplierCodes = useMemo(
+    () => getStoreSupplierCodes(currentStoreCode),
+    [currentStoreCode]
+  );
 
   // ===================== 핸들러: 조회 =====================
   const handleSearch = () => {
@@ -161,18 +187,96 @@ export default function StorePartDeductionRegistrationPage() {
   // ===================== 핸들러: 매입처 =====================
   const canEditSuppliers = selected && selected.status !== '확정';
 
-  const handleAddSupplier = () => {
-    if (!canEditSuppliers) return alert('공제정보를 먼저 저장 후 매입처를 추가할 수 있습니다. (확정 건은 불가)');
-    if (!inpSupplierCode) return alert('매입처코드를 입력하세요.');
-    if (selected!.suppliers.some(s => s.code === inpSupplierCode)) return alert('이미 등록된 매입처입니다.');
-    const newSup: DeductionSupplier = {
-      code: inpSupplierCode, name: inpSupplierName || `매입처-${inpSupplierCode}`,
-      itemCode: 'IC' + inpSupplierCode.slice(-4) + '00', itemName: `${inpSupplierName || '매입처'} 기본품목`,
-      type: 'N', sales: 0, excludeSales: 0,
+  /**
+   * 매입처 마스터 정보 + 해당 점포 매출을 조합하여 DeductionSupplier 생성
+   * (현재 선택된 공제정보의 점포 기준)
+   */
+  const buildSupplierRow = (code: string, nameHint?: string): DeductionSupplier | null => {
+    if (!selected) return null;
+    const master = getSupplierMaster(code);
+    const salesInfo = getStoreSupplierSales(selected.storeCode, code);
+    return {
+      code,
+      name: master?.name || nameHint || `매입처-${code}`,
+      itemCode: master?.itemCode || 'IC' + code.slice(-4) + '00',
+      itemName: master?.itemName || `${master?.name || nameHint || '매입처'} 기본품목`,
+      type: 'N',
+      sales: salesInfo?.sales || 0,
+      excludeSales: salesInfo?.excludeSales || 0,
     };
+  };
+
+  /**
+   * 매입처코드 조회 (다른 화면과 동일한 패턴)
+   * - 코드 비어있음 → 모달 오픈
+   * - 현재 점포의 매입처 리스트에서 정확히 1건 일치 → 바로 그리드에 추가
+   * - 불일치 → 모달 오픈
+   */
+  const handleSupplierCodeSearch = () => {
+    if (!canEditSuppliers) return alert('공제정보를 먼저 저장 후 매입처를 추가할 수 있습니다. (확정 건은 불가)');
+    if (!inpSupplierCode.trim()) { setIsSupplierModalOpen(true); return; }
+    const code = inpSupplierCode.trim();
+    // 이미 그리드에 있는 매입처인지 체크
+    if (selected!.suppliers.some(s => s.code === code)) {
+      alert('이미 등록된 매입처입니다.');
+      return;
+    }
+    // 현재 점포의 매입처 리스트에 존재하는지 확인
+    if (allowedSupplierCodes.includes(code)) {
+      const newSup = buildSupplierRow(code);
+      if (!newSup) return;
+      addSupplierToGrid(newSup);
+    } else {
+      setIsSupplierModalOpen(true);
+    }
+  };
+
+  /**
+   * 매입처명 조회 (다른 화면과 동일한 패턴)
+   * - 이름 비어있음 → 모달 오픈
+   * - 현재 점포의 매입처 리스트 중 이름 일치 1건 → 바로 그리드에 추가
+   * - 불일치/다수 → 모달 오픈
+   */
+  const handleSupplierNameSearch = () => {
+    if (!canEditSuppliers) return alert('공제정보를 먼저 저장 후 매입처를 추가할 수 있습니다. (확정 건은 불가)');
+    if (!inpSupplierName.trim()) { setIsSupplierModalOpen(true); return; }
+    const nameQuery = inpSupplierName.trim();
+    // 현재 점포에 속한 매입처 중 이름 매칭
+    const candidates = allowedSupplierCodes
+      .map(c => getSupplierMaster(c))
+      .filter((m): m is NonNullable<typeof m> => !!m && m.name.includes(nameQuery));
+    if (candidates.length === 1) {
+      const match = candidates[0];
+      if (selected!.suppliers.some(s => s.code === match.code)) {
+        alert('이미 등록된 매입처입니다.');
+        return;
+      }
+      const newSup = buildSupplierRow(match.code);
+      if (!newSup) return;
+      addSupplierToGrid(newSup);
+    } else {
+      setIsSupplierModalOpen(true);
+    }
+  };
+
+  /** 그리드에 매입처 행 추가 + 입력 필드 초기화 */
+  const addSupplierToGrid = (newSup: DeductionSupplier) => {
     setMasters(prev => prev.map(m => m.id !== selected!.id ? m : { ...m, suppliers: [...m.suppliers, newSup] }));
     setFiltered(prev => prev.map(m => m.id !== selected!.id ? m : { ...m, suppliers: [...m.suppliers, newSup] }));
-    setInpSupplierCode(''); setInpSupplierName('');
+    setInpSupplierCode('');
+    setInpSupplierName('');
+  };
+
+  /** 모달에서 매입처 선택 시 */
+  const handleSupplierSelect = (item: { code: string; name: string }) => {
+    if (!canEditSuppliers) return;
+    if (selected!.suppliers.some(s => s.code === item.code)) {
+      alert('이미 등록된 매입처입니다.');
+      return;
+    }
+    const newSup = buildSupplierRow(item.code, item.name);
+    if (!newSup) return;
+    addSupplierToGrid(newSup);
   };
 
   const handleBulkApply = () => {
@@ -204,16 +308,32 @@ export default function StorePartDeductionRegistrationPage() {
     alert(`${checkedSups.length}건 일괄적용 완료.`);
   };
 
+  /**
+   * [매출조회] 버튼
+   * - 백엔드(DW)에서 해당 점포의 전체 매입처 매출을 일괄 조회
+   * - 등록된 매입처만 매출 반영 (기존 매출제외금액은 유지)
+   */
   const handleQuerySales = () => {
     if (!canEditSuppliers) return;
     if (!confirm('정산년월 기준 전월 매출을 DW에서 일괄 조회하여 매출금액 컬럼에 반영합니다. (기존 매출제외금액은 유지)')) return;
+    const storeSales = getAllStoreSupplierSales(selected!.storeCode);
     setMasters(prev => prev.map(m => m.id !== selected!.id ? m : {
       ...m,
-      suppliers: m.suppliers.map(s => ({ ...s, sales: s.sales || Math.floor(Math.random() * 5000000 + 100000) })),
+      suppliers: m.suppliers.map(s => {
+        const fromDW = storeSales[s.code];
+        return fromDW
+          ? { ...s, sales: fromDW.sales }
+          : s; // DW에 없으면 기존값 유지
+      }),
     }));
     setFiltered(prev => prev.map(m => m.id !== selected!.id ? m : {
       ...m,
-      suppliers: m.suppliers.map(s => ({ ...s, sales: s.sales || Math.floor(Math.random() * 5000000 + 100000) })),
+      suppliers: m.suppliers.map(s => {
+        const fromDW = storeSales[s.code];
+        return fromDW
+          ? { ...s, sales: fromDW.sales }
+          : s;
+      }),
     }));
     alert('매출이 반영되었습니다.');
   };
@@ -236,11 +356,16 @@ export default function StorePartDeductionRegistrationPage() {
           if (!codeRaw || !/^\d+$/.test(codeRaw.replace(/\D/g, ''))) return;
           const code = codeRaw.replace(/\D/g, '').padStart(7, '0');
           if (selected!.suppliers.some(s => s.code === code) || newSups.some(s => s.code === code)) return;
+          // 마스터 정보가 있으면 사용
+          const master = getSupplierMaster(code);
           newSups.push({
-            code, name: name || `매입처-${code}`,
-            itemCode: 'IC' + code.slice(-4) + '00',
-            itemName: `${name} 기본품목`,
-            type: 'N', sales, excludeSales: 0,
+            code,
+            name: master?.name || name || `매입처-${code}`,
+            itemCode: master?.itemCode || 'IC' + code.slice(-4) + '00',
+            itemName: master?.itemName || `${name} 기본품목`,
+            type: 'N',
+            sales,
+            excludeSales: 0,
           });
         });
         setMasters(prev => prev.map(m => m.id !== selected!.id ? m : { ...m, suppliers: [...m.suppliers, ...newSups] }));
@@ -404,8 +529,32 @@ export default function StorePartDeductionRegistrationPage() {
         <div className="erp-section" style={{ marginBottom: 4 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 6, flexWrap: 'wrap' }}>
             <span className="erp-label" style={{ border: '1px solid #e5e7eb' }}>매입처코드</span>
-            <input className="erp-input" style={{ width: 90 }} value={inpSupplierCode} onChange={e => setInpSupplierCode(e.target.value)} placeholder="코드" />
-            <input className="erp-input" style={{ width: 160 }} value={inpSupplierName} onChange={e => setInpSupplierName(e.target.value)} placeholder="매입처명 (enter로 추가)" onKeyDown={e => e.key === 'Enter' && handleAddSupplier()} />
+            <input
+              className="erp-input"
+              style={{ width: 90 }}
+              value={inpSupplierCode}
+              onChange={e => setInpSupplierCode(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSupplierCodeSearch()}
+              placeholder="코드"
+            />
+            <input
+              className="erp-input"
+              style={{ width: 160 }}
+              value={inpSupplierName}
+              onChange={e => setInpSupplierName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSupplierNameSearch()}
+              placeholder="매입처명 (enter로 조회)"
+            />
+            <button
+              className="erp-btn-header"
+              onClick={() => {
+                if (!canEditSuppliers) return alert('공제정보를 먼저 저장 후 매입처를 추가할 수 있습니다.');
+                setIsSupplierModalOpen(true);
+              }}
+              title="매입처 조회"
+            >
+              🔍
+            </button>
             <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <input type="checkbox" checked={chkType} onChange={e => setChkType(e.target.checked)} />
               <span style={{ fontSize: 11 }}>공제유형</span>
@@ -508,6 +657,15 @@ export default function StorePartDeductionRegistrationPage() {
           </div>
         </div>
       </div>
+
+      {/* ── 매입처 조회 모달 (다른 화면들과 동일한 컴포넌트) ── */}
+      <SupplierSearchModal
+        isOpen={isSupplierModalOpen}
+        onClose={() => setIsSupplierModalOpen(false)}
+        initialSearchName={inpSupplierName}
+        allowedCodes={allowedSupplierCodes}
+        onSelect={handleSupplierSelect}
+      />
     </div>
   );
 }
