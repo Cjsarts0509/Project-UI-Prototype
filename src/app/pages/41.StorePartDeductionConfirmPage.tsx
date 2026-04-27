@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
-import { MOCK_DEDUCTION_MASTERS, STORE_LIST, DeductionMaster } from '../../data/mockStorePartDeduction';
+import { STORE_LIST, DeductionMaster } from '../../data/mockStorePartDeduction';
 import { calcDeduction, TYPE_LABEL } from '../../utils/deductionCalc';
+import { useDeductionStore } from '../../context/DeductionContext';
 
 type Status = '전체' | '작성중' | '확정';
 type YN = '전체' | 'Y' | 'N';
@@ -17,9 +18,19 @@ export default function StorePartDeductionConfirmPage() {
   const [sStatus, setSStatus] = useState<Status>('전체');
   const [sFinal, setSFinal] = useState<YN>('전체');
 
-  const [masters, setMasters] = useState<DeductionMaster[]>(MOCK_DEDUCTION_MASTERS);
-  const [filtered, setFiltered] = useState<DeductionMaster[]>(MOCK_DEDUCTION_MASTERS);
-  const [selectedId, setSelectedId] = useState<string | null>(MOCK_DEDUCTION_MASTERS[0]?.id || null);
+  // 전역 컨텍스트 — 페이지 40과 동기화
+  const { masters, setMasters } = useDeductionStore();
+  const [appliedFilter, setAppliedFilter] = useState<{ yearMonth: string; store: string; status: Status; final: YN }>({
+    yearMonth: '', store: '전체', status: '전체', final: '전체',
+  });
+  const filtered = useMemo(() => masters.filter(m => {
+    if (appliedFilter.yearMonth && m.yearMonth !== appliedFilter.yearMonth) return false;
+    if (appliedFilter.store !== '전체' && m.storeName !== appliedFilter.store) return false;
+    if (appliedFilter.status !== '전체' && m.status !== appliedFilter.status) return false;
+    if (appliedFilter.final !== '전체' && m.finalConfirmed !== appliedFilter.final) return false;
+    return true;
+  }), [masters, appliedFilter]);
+  const [selectedId, setSelectedId] = useState<string | null>(masters[0]?.id || null);
   const [checkedMasters, setCheckedMasters] = useState<string[]>([]);
   const [checkedSups, setCheckedSups] = useState<string[]>([]);
 
@@ -33,6 +44,7 @@ export default function StorePartDeductionConfirmPage() {
   const canIfas = checkedRows.length > 0 && checkedRows.every(m => m.finalConfirmed === 'Y' && m.ifasSent === 'N');
 
   const handleSearch = () => {
+    setAppliedFilter({ yearMonth: sYearMonth, store: sStore, status: sStatus, final: sFinal });
     const list = masters.filter(m => {
       if (sYearMonth && m.yearMonth !== sYearMonth) return false;
       if (sStore !== '전체' && m.storeName !== sStore) return false;
@@ -40,7 +52,6 @@ export default function StorePartDeductionConfirmPage() {
       if (sFinal !== '전체' && m.finalConfirmed !== sFinal) return false;
       return true;
     });
-    setFiltered(list);
     setSelectedId(list[0]?.id || null);
     setCheckedMasters([]);
     setCheckedSups([]);
@@ -48,7 +59,7 @@ export default function StorePartDeductionConfirmPage() {
 
   const handleReset = () => {
     setSYearMonth(currentYm()); setSStore('전체'); setSStatus('전체'); setSFinal('전체');
-    setFiltered(masters);
+    setAppliedFilter({ yearMonth: '', store: '전체', status: '전체', final: '전체' });
   };
 
   const checkedConfirmedRecords = () =>
@@ -61,7 +72,6 @@ export default function StorePartDeductionConfirmPage() {
     if (targets.some(m => m.finalConfirmed === 'Y')) return alert('이미 최종확정된 항목이 포함되어 있습니다.');
     if (!confirm(`${targets.length}건을 최종확정합니다.`)) return;
     setMasters(prev => prev.map(m => checkedMasters.includes(m.id) ? { ...m, finalConfirmed: 'Y', finalConfirmDate: today(), finalConfirmEmpNo: '2024001', finalConfirmName: '조준수' } : m));
-    setFiltered(prev => prev.map(m => checkedMasters.includes(m.id) ? { ...m, finalConfirmed: 'Y', finalConfirmDate: today(), finalConfirmEmpNo: '2024001', finalConfirmName: '조준수' } : m));
     alert('최종확정 완료.');
   };
 
@@ -71,7 +81,6 @@ export default function StorePartDeductionConfirmPage() {
     if (!confirm(`${targets.length}건을 확정취소합니다.`)) return;
     const ids = targets.map(t => t.id);
     setMasters(prev => prev.map(m => ids.includes(m.id) ? { ...m, finalConfirmed: 'N', finalConfirmDate: '', finalConfirmEmpNo: '', finalConfirmName: '' } : m));
-    setFiltered(prev => prev.map(m => ids.includes(m.id) ? { ...m, finalConfirmed: 'N', finalConfirmDate: '', finalConfirmEmpNo: '', finalConfirmName: '' } : m));
   };
 
   const handleIfas = () => {
@@ -80,7 +89,6 @@ export default function StorePartDeductionConfirmPage() {
     if (!confirm(`${targets.length}건을 IFAS에 전송합니다.`)) return;
     const ids = targets.map(t => t.id);
     setMasters(prev => prev.map(m => ids.includes(m.id) ? { ...m, ifasSent: 'Y', ifasSentDate: today() } : m));
-    setFiltered(prev => prev.map(m => ids.includes(m.id) ? { ...m, ifasSent: 'Y', ifasSentDate: today() } : m));
     alert('IFAS 전송 완료.');
   };
 
