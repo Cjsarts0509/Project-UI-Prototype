@@ -46,12 +46,6 @@ export default function StorePartDeductionConfirmPage() {
   const canUnfinalize = checkedRows.length > 0 && checkedRows.every(m => m.finalConfirmed === 'Y' && m.ifasSent === 'N');
   const canIfas = checkedRows.length > 0 && checkedRows.every(m => m.finalConfirmed === 'Y' && m.ifasSent === 'N');
 
-  // 체크된 마스터 기준 버튼 활성/비활성 (스토리보드 규칙)
-  const checkedRows = masters.filter(m => checkedMasters.includes(m.id));
-  const canFinalize = checkedRows.length > 0 && checkedRows.every(m => m.status === '확정' && m.finalConfirmed === 'N');
-  const canUnfinalize = checkedRows.length > 0 && checkedRows.every(m => m.finalConfirmed === 'Y' && m.ifasSent === 'N');
-  const canIfas = checkedRows.length > 0 && checkedRows.every(m => m.finalConfirmed === 'Y' && m.ifasSent === 'N');
-
   const handleSearch = () => {
     setAppliedFilter({ yearMonth: sYearMonth, store: sStore, status: sStatus, final: sFinal });
     const list = masters.filter(m => {
