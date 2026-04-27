@@ -206,6 +206,7 @@ export default function StorePartDeductionConfirmPage() {
                   <th>공용알바공제번호</th>
                   <th style={{ width: 90 }}>정산년월</th>
                   <th style={{ width: 100 }}>영업점</th>
+                  <th style={{ width: 110 }}>총인건비</th>
                   <th style={{ width: 130 }}>총인건비(VAT포함)</th>
                   <th style={{ width: 80 }}>매입처수</th>
                   <th style={{ width: 80 }}>진행상태</th>
@@ -222,7 +223,7 @@ export default function StorePartDeductionConfirmPage() {
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr className="erp-empty-row"><td colSpan={16}>조회된 데이터가 없습니다.</td></tr>
+                  <tr className="erp-empty-row"><td colSpan={17}>조회된 데이터가 없습니다.</td></tr>
                 ) : filtered.map(m => (
                   <tr key={m.id} className={selectedId === m.id ? 'selected' : ''} onClick={() => { setSelectedId(m.id); setCheckedSups([]); }}>
                     <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
@@ -231,6 +232,7 @@ export default function StorePartDeductionConfirmPage() {
                     <td style={{ textAlign: 'center' }}>{m.id}</td>
                     <td style={{ textAlign: 'center' }}>{m.yearMonth}</td>
                     <td style={{ textAlign: 'center' }}>{m.storeName}</td>
+                    <td style={{ textAlign: 'right' }}>{fmtNum(m.totalLaborCost)}</td>
                     <td style={{ textAlign: 'right' }}>{fmtNum(withVAT(m.totalLaborCost))}</td>
                     <td style={{ textAlign: 'right' }}>{m.suppliers.length}</td>
                     <td style={{ textAlign: 'center', color: m.status === '확정' ? '#dc2626' : '#2563eb' }}>{m.status}</td>
