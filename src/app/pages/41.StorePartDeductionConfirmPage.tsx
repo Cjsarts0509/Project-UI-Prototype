@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
-import { MOCK_DEDUCTION_MASTERS, STORE_LIST, DeductionMaster } from '../../data/mockStorePartDeduction';
+import { STORE_LIST, DeductionMaster } from '../../data/mockStorePartDeduction';
 import { calcDeduction, TYPE_LABEL } from '../../utils/deductionCalc';
+import { useDeductionStore } from '../../context/DeductionContext';
 
 type Status = '전체' | '작성중' | '확정';
 type YN = '전체' | 'Y' | 'N';
@@ -9,6 +10,9 @@ type YN = '전체' | 'Y' | 'N';
 const currentYm = () => new Date().toISOString().slice(0, 7);
 const today = () => new Date().toISOString().slice(0, 10);
 const fmtNum = (n: number) => (n || 0).toLocaleString('ko-KR');
+// VAT 10% 포함 — 페이지 40과 동일 정책
+const VAT_RATE = 0.1;
+const withVAT = (base: number) => Math.round((base || 0) * (1 + VAT_RATE));
 
 export default function StorePartDeductionConfirmPage() {
   // 초기엔 확정된 건만 노출되도록 — 그러나 더미는 전부 작성중이라 전체 보여줌
@@ -17,14 +21,30 @@ export default function StorePartDeductionConfirmPage() {
   const [sStatus, setSStatus] = useState<Status>('전체');
   const [sFinal, setSFinal] = useState<YN>('전체');
 
-  const [masters, setMasters] = useState<DeductionMaster[]>(MOCK_DEDUCTION_MASTERS);
-  const [filtered, setFiltered] = useState<DeductionMaster[]>(MOCK_DEDUCTION_MASTERS);
-  const [selectedId, setSelectedId] = useState<string | null>(MOCK_DEDUCTION_MASTERS[0]?.id || null);
+  // 전역 컨텍스트 — 페이지 40과 동기화
+  const { masters, setMasters } = useDeductionStore();
+  const [appliedFilter, setAppliedFilter] = useState<{ yearMonth: string; store: string; status: Status; final: YN }>({
+    yearMonth: '', store: '전체', status: '전체', final: '전체',
+  });
+  const filtered = useMemo(() => masters.filter(m => {
+    if (appliedFilter.yearMonth && m.yearMonth !== appliedFilter.yearMonth) return false;
+    if (appliedFilter.store !== '전체' && m.storeName !== appliedFilter.store) return false;
+    if (appliedFilter.status !== '전체' && m.status !== appliedFilter.status) return false;
+    if (appliedFilter.final !== '전체' && m.finalConfirmed !== appliedFilter.final) return false;
+    return true;
+  }), [masters, appliedFilter]);
+  const [selectedId, setSelectedId] = useState<string | null>(masters[0]?.id || null);
   const [checkedMasters, setCheckedMasters] = useState<string[]>([]);
   const [checkedSups, setCheckedSups] = useState<string[]>([]);
 
   const selected = useMemo(() => masters.find(m => m.id === selectedId) || null, [masters, selectedId]);
-  const rows = useMemo(() => selected ? calcDeduction(selected.totalLaborCost, selected.suppliers) : [], [selected]);
+  const rows = useMemo(() => selected ? calcDeduction(withVAT(selected.totalLaborCost), selected.suppliers) : [], [selected]);
+
+  // 체크된 마스터 기준 버튼 활성/비활성 (스토리보드 규칙)
+  const checkedRows = masters.filter(m => checkedMasters.includes(m.id));
+  const canFinalize = checkedRows.length > 0 && checkedRows.every(m => m.status === '확정' && m.finalConfirmed === 'N');
+  const canUnfinalize = checkedRows.length > 0 && checkedRows.every(m => m.finalConfirmed === 'Y' && m.ifasSent === 'N');
+  const canIfas = checkedRows.length > 0 && checkedRows.every(m => m.finalConfirmed === 'Y' && m.ifasSent === 'N');
 
   // 체크된 마스터 기준 버튼 활성/비활성 (스토리보드 규칙)
   const checkedRows = masters.filter(m => checkedMasters.includes(m.id));
@@ -33,6 +53,7 @@ export default function StorePartDeductionConfirmPage() {
   const canIfas = checkedRows.length > 0 && checkedRows.every(m => m.finalConfirmed === 'Y' && m.ifasSent === 'N');
 
   const handleSearch = () => {
+    setAppliedFilter({ yearMonth: sYearMonth, store: sStore, status: sStatus, final: sFinal });
     const list = masters.filter(m => {
       if (sYearMonth && m.yearMonth !== sYearMonth) return false;
       if (sStore !== '전체' && m.storeName !== sStore) return false;
@@ -40,7 +61,6 @@ export default function StorePartDeductionConfirmPage() {
       if (sFinal !== '전체' && m.finalConfirmed !== sFinal) return false;
       return true;
     });
-    setFiltered(list);
     setSelectedId(list[0]?.id || null);
     setCheckedMasters([]);
     setCheckedSups([]);
@@ -48,7 +68,7 @@ export default function StorePartDeductionConfirmPage() {
 
   const handleReset = () => {
     setSYearMonth(currentYm()); setSStore('전체'); setSStatus('전체'); setSFinal('전체');
-    setFiltered(masters);
+    setAppliedFilter({ yearMonth: '', store: '전체', status: '전체', final: '전체' });
   };
 
   const checkedConfirmedRecords = () =>
@@ -61,7 +81,6 @@ export default function StorePartDeductionConfirmPage() {
     if (targets.some(m => m.finalConfirmed === 'Y')) return alert('이미 최종확정된 항목이 포함되어 있습니다.');
     if (!confirm(`${targets.length}건을 최종확정합니다.`)) return;
     setMasters(prev => prev.map(m => checkedMasters.includes(m.id) ? { ...m, finalConfirmed: 'Y', finalConfirmDate: today(), finalConfirmEmpNo: '2024001', finalConfirmName: '조준수' } : m));
-    setFiltered(prev => prev.map(m => checkedMasters.includes(m.id) ? { ...m, finalConfirmed: 'Y', finalConfirmDate: today(), finalConfirmEmpNo: '2024001', finalConfirmName: '조준수' } : m));
     alert('최종확정 완료.');
   };
 
@@ -71,7 +90,6 @@ export default function StorePartDeductionConfirmPage() {
     if (!confirm(`${targets.length}건을 확정취소합니다.`)) return;
     const ids = targets.map(t => t.id);
     setMasters(prev => prev.map(m => ids.includes(m.id) ? { ...m, finalConfirmed: 'N', finalConfirmDate: '', finalConfirmEmpNo: '', finalConfirmName: '' } : m));
-    setFiltered(prev => prev.map(m => ids.includes(m.id) ? { ...m, finalConfirmed: 'N', finalConfirmDate: '', finalConfirmEmpNo: '', finalConfirmName: '' } : m));
   };
 
   const handleIfas = () => {
@@ -80,7 +98,6 @@ export default function StorePartDeductionConfirmPage() {
     if (!confirm(`${targets.length}건을 IFAS에 전송합니다.`)) return;
     const ids = targets.map(t => t.id);
     setMasters(prev => prev.map(m => ids.includes(m.id) ? { ...m, ifasSent: 'Y', ifasSentDate: today() } : m));
-    setFiltered(prev => prev.map(m => ids.includes(m.id) ? { ...m, ifasSent: 'Y', ifasSentDate: today() } : m));
     alert('IFAS 전송 완료.');
   };
 
@@ -101,7 +118,7 @@ export default function StorePartDeductionConfirmPage() {
     if (!filtered.length) return alert('다운로드할 데이터가 없습니다.');
     const data: any[] = [];
     filtered.forEach(m => {
-      const mr = calcDeduction(m.totalLaborCost, m.suppliers);
+      const mr = calcDeduction(withVAT(m.totalLaborCost), m.suppliers);
       mr.forEach((r, i) => {
         data.push({
           공용알바공제번호: m.id, 정산년월: m.yearMonth, 영업점: m.storeName,
@@ -196,6 +213,7 @@ export default function StorePartDeductionConfirmPage() {
                   <th style={{ width: 90 }}>정산년월</th>
                   <th style={{ width: 100 }}>영업점</th>
                   <th style={{ width: 110 }}>총인건비</th>
+                  <th style={{ width: 130 }}>총인건비(VAT포함)</th>
                   <th style={{ width: 80 }}>매입처수</th>
                   <th style={{ width: 80 }}>진행상태</th>
                   <th style={{ width: 100 }}>최종확정여부</th>
@@ -211,7 +229,7 @@ export default function StorePartDeductionConfirmPage() {
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr className="erp-empty-row"><td colSpan={16}>조회된 데이터가 없습니다.</td></tr>
+                  <tr className="erp-empty-row"><td colSpan={17}>조회된 데이터가 없습니다.</td></tr>
                 ) : filtered.map(m => (
                   <tr key={m.id} className={selectedId === m.id ? 'selected' : ''} onClick={() => { setSelectedId(m.id); setCheckedSups([]); }}>
                     <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
@@ -221,6 +239,7 @@ export default function StorePartDeductionConfirmPage() {
                     <td style={{ textAlign: 'center' }}>{m.yearMonth}</td>
                     <td style={{ textAlign: 'center' }}>{m.storeName}</td>
                     <td style={{ textAlign: 'right' }}>{fmtNum(m.totalLaborCost)}</td>
+                    <td style={{ textAlign: 'right' }}>{fmtNum(withVAT(m.totalLaborCost))}</td>
                     <td style={{ textAlign: 'right' }}>{m.suppliers.length}</td>
                     <td style={{ textAlign: 'center', color: m.status === '확정' ? '#dc2626' : '#2563eb' }}>{m.status}</td>
                     <td style={{ textAlign: 'center', fontWeight: 700, color: m.finalConfirmed === 'Y' ? '#16a34a' : '#6b7280' }}>{m.finalConfirmed}</td>
