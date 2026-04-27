@@ -21,9 +21,16 @@ export default function StorePartDeductionConfirmPage() {
   const [filtered, setFiltered] = useState<DeductionMaster[]>(MOCK_DEDUCTION_MASTERS);
   const [selectedId, setSelectedId] = useState<string | null>(MOCK_DEDUCTION_MASTERS[0]?.id || null);
   const [checkedMasters, setCheckedMasters] = useState<string[]>([]);
+  const [checkedSups, setCheckedSups] = useState<string[]>([]);
 
   const selected = useMemo(() => masters.find(m => m.id === selectedId) || null, [masters, selectedId]);
   const rows = useMemo(() => selected ? calcDeduction(selected.totalLaborCost, selected.suppliers) : [], [selected]);
+
+  // 체크된 마스터 기준 버튼 활성/비활성 (스토리보드 규칙)
+  const checkedRows = masters.filter(m => checkedMasters.includes(m.id));
+  const canFinalize = checkedRows.length > 0 && checkedRows.every(m => m.status === '확정' && m.finalConfirmed === 'N');
+  const canUnfinalize = checkedRows.length > 0 && checkedRows.every(m => m.finalConfirmed === 'Y' && m.ifasSent === 'N');
+  const canIfas = checkedRows.length > 0 && checkedRows.every(m => m.finalConfirmed === 'Y' && m.ifasSent === 'N');
 
   const handleSearch = () => {
     const list = masters.filter(m => {
@@ -36,6 +43,7 @@ export default function StorePartDeductionConfirmPage() {
     setFiltered(list);
     setSelectedId(list[0]?.id || null);
     setCheckedMasters([]);
+    setCheckedSups([]);
   };
 
   const handleReset = () => {
@@ -154,9 +162,24 @@ export default function StorePartDeductionConfirmPage() {
         <div className="erp-section-header">
           <div className="erp-section-title">점포별 공용알바 공제확정정보</div>
           <div style={{ display: 'flex', gap: 4 }}>
-            <button className="erp-btn-action" onClick={handleFinalize}>최종확정</button>
-            <button className="erp-btn-header" onClick={handleUnfinalize}>확정취소</button>
-            <button className="erp-btn-action" onClick={handleIfas}>IFAS전송</button>
+            <button
+              className="erp-btn-action"
+              onClick={handleFinalize}
+              disabled={!canFinalize}
+              title={canFinalize ? '' : '확정 상태이며 미최종확정인 항목을 선택하세요.'}
+            >최종확정</button>
+            <button
+              className="erp-btn-header"
+              onClick={handleUnfinalize}
+              disabled={!canUnfinalize}
+              title={canUnfinalize ? '' : '최종확정 Y이며 IFAS 미전송인 항목만 취소 가능합니다.'}
+            >확정취소</button>
+            <button
+              className="erp-btn-action"
+              onClick={handleIfas}
+              disabled={!canIfas}
+              title={canIfas ? '' : '최종확정 Y이며 IFAS 미전송인 항목만 전송 가능합니다.'}
+            >IFAS전송</button>
             <button className="erp-btn-action" onClick={handleExcelDown}>엑셀다운</button>
             <button className="erp-btn-action" onClick={handleExcelDownAll}>전체엑셀다운</button>
           </div>
@@ -190,7 +213,7 @@ export default function StorePartDeductionConfirmPage() {
                 {filtered.length === 0 ? (
                   <tr className="erp-empty-row"><td colSpan={16}>조회된 데이터가 없습니다.</td></tr>
                 ) : filtered.map(m => (
-                  <tr key={m.id} className={selectedId === m.id ? 'selected' : ''} onClick={() => setSelectedId(m.id)}>
+                  <tr key={m.id} className={selectedId === m.id ? 'selected' : ''} onClick={() => { setSelectedId(m.id); setCheckedSups([]); }}>
                     <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                       <input type="checkbox" checked={checkedMasters.includes(m.id)} onChange={e => setCheckedMasters(p => e.target.checked ? [...p, m.id] : p.filter(x => x !== m.id))} />
                     </td>
@@ -230,7 +253,13 @@ export default function StorePartDeductionConfirmPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
               <thead>
                 <tr>
-                  <th style={{ width: 36 }}><input type="checkbox" /></th>
+                  <th style={{ width: 36 }}>
+                    <input
+                      type="checkbox"
+                      checked={rows.length > 0 && rows.every(r => checkedSups.includes(r.code))}
+                      onChange={e => setCheckedSups(e.target.checked ? rows.map(r => r.code) : [])}
+                    />
+                  </th>
                   <th style={{ width: 44 }}>순번</th>
                   <th style={{ width: 100 }}>영업점</th>
                   <th style={{ width: 100 }}>매입처코드</th>
@@ -252,7 +281,13 @@ export default function StorePartDeductionConfirmPage() {
                   <>
                     {rows.map((r, i) => (
                       <tr key={r.code}>
-                        <td style={{ textAlign: 'center' }}><input type="checkbox" /></td>
+                        <td style={{ textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={checkedSups.includes(r.code)}
+                            onChange={e => setCheckedSups(p => e.target.checked ? [...p, r.code] : p.filter(x => x !== r.code))}
+                          />
+                        </td>
                         <td style={{ textAlign: 'center' }}>{i + 1}</td>
                         <td style={{ textAlign: 'center' }}>{selected.storeName}</td>
                         <td style={{ textAlign: 'center' }}>{r.code}</td>
