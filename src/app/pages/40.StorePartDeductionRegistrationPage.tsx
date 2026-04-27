@@ -6,9 +6,9 @@ import {
   DeductionMaster,
   DeductionSupplier,
   getStoreSupplierCodes,
-  getStoreSupplierSales,
   getAllStoreSupplierSales,
   getSupplierMaster,
+  getSupplierItems,
 } from '../../data/mockStorePartDeduction';
 import { calcDeduction, TYPE_LABEL } from '../../utils/deductionCalc';
 import { SupplierSearchModal } from '../components/SupplierSearchModal';
@@ -192,18 +192,21 @@ export default function StorePartDeductionRegistrationPage() {
    * 매입처 마스터 정보 + 해당 점포 매출을 조합하여 DeductionSupplier 생성
    * (현재 선택된 공제정보의 점포 기준)
    */
+  /**
+   * 매입처 추가 시: 매입처코드/매입처명 + 기본 매입처품목('일반')만 채우고
+   * 매출/매출제외는 0으로 둠 (사용자가 [매출조회] 클릭해야 채워짐).
+   */
   const buildSupplierRow = (code: string, nameHint?: string): DeductionSupplier | null => {
     if (!selected) return null;
     const master = getSupplierMaster(code);
-    const salesInfo = getStoreSupplierSales(selected.storeCode, code);
     return {
       code,
       name: master?.name || nameHint || `매입처-${code}`,
       itemCode: master?.itemCode || 'IC' + code.slice(-4) + '00',
-      itemName: master?.itemName || `${master?.name || nameHint || '매입처'} 기본품목`,
+      itemName: master?.itemName || `${master?.name || nameHint || '매입처'} 일반`,
       type: 'N',
-      sales: salesInfo?.sales || 0,
-      excludeSales: salesInfo?.excludeSales || 0,
+      sales: 0,
+      excludeSales: 0,
       regDate: today(),
       regEmpNo: CURRENT_USER.empNo,
       regName: CURRENT_USER.name,
@@ -359,13 +362,13 @@ export default function StorePartDeductionRegistrationPage() {
           if (!codeRaw || !/^\d+$/.test(codeRaw.replace(/\D/g, ''))) return;
           const code = codeRaw.replace(/\D/g, '').padStart(7, '0');
           if (selected!.suppliers.some(s => s.code === code) || newSups.some(s => s.code === code)) return;
-          // 마스터 정보가 있으면 사용
+          // 매입처 마스터에서 기본 매입처품목('일반') 가져옴
           const master = getSupplierMaster(code);
           newSups.push({
             code,
             name: master?.name || name || `매입처-${code}`,
             itemCode: master?.itemCode || 'IC' + code.slice(-4) + '00',
-            itemName: master?.itemName || `${name} 기본품목`,
+            itemName: master?.itemName || `${name} 일반`,
             type: 'N',
             sales,
             excludeSales: 0,
@@ -660,7 +663,26 @@ export default function StorePartDeductionRegistrationPage() {
                     <td style={{ textAlign: 'center' }}>{r.code}</td>
                     <td>{r.name}</td>
                     <td style={{ textAlign: 'center' }}>{r.itemCode}</td>
-                    <td>{r.itemName}</td>
+                    <td style={{ padding: 2 }}>
+                      {(() => {
+                        const items = getSupplierItems(r.code);
+                        if (items.length <= 1) return <span style={{ paddingLeft: 4 }}>{r.itemName}</span>;
+                        return (
+                          <select
+                            className="erp-select-trigger"
+                            style={{ width: '100%' }}
+                            value={r.itemCode}
+                            disabled={!canEditSuppliers}
+                            onChange={e => {
+                              const it = items.find(x => x.itemCode === e.target.value);
+                              if (it) updateOneSupplier(r.code, { itemCode: it.itemCode, itemName: it.itemName });
+                            }}
+                          >
+                            {items.map(it => <option key={it.itemCode} value={it.itemCode}>{it.itemName}</option>)}
+                          </select>
+                        );
+                      })()}
+                    </td>
                     <td style={{ textAlign: 'center', padding: 2 }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         <select
