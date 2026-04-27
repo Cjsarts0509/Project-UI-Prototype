@@ -344,6 +344,13 @@ export default function StorePartDeductionRegistrationPage() {
     alert('매출이 반영되었습니다.');
   };
 
+  /**
+   * 파일등록: 엑셀(xlsx/xls)에서 매입처코드 일괄 등록
+   * - 헤더 자동 감지: 매입처코드 / 매입처명 / 매출(매출금액) / 매출제외금액 / 매입처품목코드 / 매입처품목코드명
+   * - 숫자형 컬럼은 콤마/공백 자동 제거
+   * - 매입처코드는 영숫자(예: 01B0470) 허용
+   * - 매입처품목코드가 파일에 있고 카탈로그에 매칭되면 그 품목으로 등록, 아니면 '일반'(기본값)
+   */
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !canEditSuppliers) return;
@@ -352,35 +359,95 @@ export default function StorePartDeductionRegistrationPage() {
       try {
         const wb = XLSX.read(evt.target?.result, { type: 'binary' });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' }) as Record<string, any>[];
+        if (!rows.length) {
+          alert('엑셀에 데이터가 없습니다.');
+          return;
+        }
+
+        // 헤더 키 자동 매칭
+        const sample = rows[0];
+        const findKey = (cands: string[]) => {
+          const keys = Object.keys(sample);
+          for (const c of cands) {
+            const hit = keys.find(k => k.replace(/\s/g, '').includes(c));
+            if (hit) return hit;
+          }
+          return null;
+        };
+        const codeKey = findKey(['매입처코드', '거래처코드', '코드']);
+        const nameKey = findKey(['매입처명', '거래처명', '매입처']);
+        const itemCodeKey = findKey(['매입처품목코드', '품목코드']);
+        const itemNameKey = findKey(['매입처품목코드명', '품목명']);
+        const salesKey = findKey(['매출금액', '매출']);
+        const excludeKey = findKey(['매출제외금액', '매출제외']);
+
+        if (!codeKey) {
+          alert('매입처코드 컬럼을 찾지 못했습니다. 헤더에 "매입처코드"가 있어야 합니다.');
+          return;
+        }
+
+        const toNum = (v: any): number => {
+          if (typeof v === 'number') return v;
+          const s = String(v ?? '').replace(/[^\d.-]/g, '');
+          return s ? Number(s) : 0;
+        };
+
         const newSups: DeductionSupplier[] = [];
-        data.forEach(r => {
-          if (!r || r.length < 2) return;
-          const codeRaw = String(r[0] || '').trim();
-          const name = String(r[1] || '').trim();
-          const sales = Number(r[2]) || 0;
-          if (!codeRaw || !/^\d+$/.test(codeRaw.replace(/\D/g, ''))) return;
-          const code = codeRaw.replace(/\D/g, '').padStart(7, '0');
-          if (selected!.suppliers.some(s => s.code === code) || newSups.some(s => s.code === code)) return;
-          // 매입처 마스터에서 기본 매입처품목('일반') 가져옴
+        let skipDup = 0;
+        rows.forEach(r => {
+          const codeRaw = String(r[codeKey] || '').trim().replace(/\s/g, '');
+          if (!codeRaw) return;
+          // 영숫자 코드 허용 (01B0470 등). 길이 4~10 정도
+          if (!/^[A-Za-z0-9]{4,10}$/.test(codeRaw)) return;
+          const code = codeRaw;
+          if (selected!.suppliers.some(s => s.code === code) || newSups.some(s => s.code === code)) {
+            skipDup++;
+            return;
+          }
+          const nameFromFile = nameKey ? String(r[nameKey] || '').trim() : '';
+          const sales = salesKey ? toNum(r[salesKey]) : 0;
+          const excludeSales = excludeKey ? toNum(r[excludeKey]) : 0;
+
+          // 매입처 카탈로그에서 일반(기본) 품목 조회
           const master = getSupplierMaster(code);
+          const items = getSupplierItems(code);
+          let item = items[0]; // 일반
+          // 파일에 매입처품목코드가 명시돼있고 카탈로그에 있으면 해당 품목 사용
+          if (itemCodeKey && items.length > 0) {
+            const wantCode = String(r[itemCodeKey] || '').trim();
+            const found = items.find(it => it.itemCode === wantCode);
+            if (found) item = found;
+          }
+          const last4 = (code.replace(/\D/g, '').slice(-4) || '0000').padStart(4, '0');
+          const fallbackItemName = itemNameKey ? String(r[itemNameKey] || '').trim() : '';
+
           newSups.push({
             code,
-            name: master?.name || name || `매입처-${code}`,
-            itemCode: master?.itemCode || 'IC' + code.slice(-4) + '00',
-            itemName: master?.itemName || `${name} 일반`,
+            name: master?.name || nameFromFile || `매입처-${code}`,
+            itemCode: item?.itemCode || `IC0${last4}00`,
+            itemName: item?.itemName || fallbackItemName || `${master?.name || nameFromFile || '매입처'} 일반`,
             type: 'N',
             sales,
-            excludeSales: 0,
+            excludeSales,
             regDate: today(),
             regEmpNo: CURRENT_USER.empNo,
             regName: CURRENT_USER.name,
           });
         });
+
+        if (!newSups.length) {
+          alert(`등록할 신규 매입처가 없습니다.${skipDup ? ` (중복 ${skipDup}건 건너뜀)` : ''}`);
+          return;
+        }
         updateSuppliers(list => [...list, ...newSups], { stampModified: false });
-        alert(`${newSups.length}건 등록.`);
-      } catch { alert('엑셀 파일 파싱 실패.'); }
-      finally { if (fileInputRef.current) fileInputRef.current.value = ''; }
+        alert(`${newSups.length}건 등록되었습니다.${skipDup ? ` (중복 ${skipDup}건 건너뜀)` : ''}`);
+      } catch (err) {
+        console.error('파일등록 오류:', err);
+        alert('엑셀 파일 파싱에 실패했습니다. 헤더 형식을 확인하세요.\n예: 매입처코드 | 매입처명 | 매출 | 매출제외금액');
+      } finally {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
     };
     reader.readAsBinaryString(file);
   };
