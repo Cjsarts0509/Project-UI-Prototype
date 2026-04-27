@@ -5,7 +5,7 @@ import {
   DeductionMaster,
   DeductionSupplier,
   getStoreSupplierCodes,
-  getAllStoreSupplierSales,
+  getAllStoreSupplierItemSales,
   getSupplierMaster,
   getSupplierItems,
 } from '../../data/mockStorePartDeduction';
@@ -354,15 +354,15 @@ export default function StorePartDeductionRegistrationPage() {
 
   /**
    * [매출조회] 버튼
-   * - 백엔드(DW)에서 해당 점포의 전체 매입처 매출을 일괄 조회
-   * - 등록된 매입처만 매출 반영 (기존 매출제외금액은 유지)
+   * - DW에서 (영업점, 매입처코드, 매입처품목코드) 단위 매출을 일괄 조회
+   * - 등록된 행에만 매출 반영 (기존 매출제외금액은 유지)
    */
   const handleQuerySales = () => {
     if (!canEditSuppliers) return;
-    if (!confirm('정산년월 기준 전월 매출을 DW에서 일괄 조회하여 매출금액 컬럼에 반영합니다. (기존 매출제외금액은 유지)')) return;
-    const storeSales = getAllStoreSupplierSales(selected!.storeCode);
+    if (!confirm('정산년월 기준 전월 매출을 DW에서 (영업점+매입처+매입처품목) 단위로 조회해 반영합니다. (기존 매출제외금액은 유지)')) return;
+    const storeSales = getAllStoreSupplierItemSales(selected!.storeCode);
     updateSuppliers(list => list.map(s => {
-      const fromDW = storeSales[s.code];
+      const fromDW = storeSales[`${s.code}__${s.itemCode}`];
       return fromDW ? { ...s, sales: fromDW.sales } : s;
     }));
     alert('매출이 반영되었습니다.');
