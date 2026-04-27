@@ -150,29 +150,44 @@ export default function StorePartDeductionRegistrationPage() {
     if (!store) return alert('유효한 영업점이 아닙니다.');
     const cost = Number(fLaborCost.replace(/,/g, '')) || 0;
 
-    if (selected && selected.status !== '확정') {
-      // 기존 건 업데이트
-      setMasters(prev => prev.map(m => m.id === selected.id ? { ...m, totalLaborCost: cost } : m));
-      alert('수정되었습니다.');
-    } else {
+    // 미선택 또는 확정건 → 신규 채번
+    // (확정건의 경우: 매입처 setup은 복제하되 매출·매출제외·수정시점 stamp는 0/초기화)
+    if (!selected || selected.status === '확정') {
       const newId = nextSeq(fYearMonth, store.code);
       const newMaster: DeductionMaster = {
         id: newId, yearMonth: fYearMonth, storeCode: store.code, storeName: store.name,
         totalLaborCost: cost, status: '작성중', finalConfirmed: 'N', ifasSent: 'N', ifasSentDate: '',
-        regDate: today(), regEmpNo: '2024001', regName: '조준수',
+        regDate: today(), regEmpNo: CURRENT_USER.empNo, regName: CURRENT_USER.name,
         finalConfirmDate: '', finalConfirmEmpNo: '', finalConfirmName: '', note: '',
-        suppliers: [],
+        suppliers: selected ? selected.suppliers.map(s => ({
+          ...s,
+          sales: 0,
+          excludeSales: 0,
+          modDate: undefined,
+          modEmpNo: undefined,
+          modName: undefined,
+        })) : [],
       };
       setMasters(prev => [newMaster, ...prev]);
       setSelectedId(newId);
-      alert(`신규 공제번호 생성: ${newId}`);
+      alert(selected ? `확정건 복제 → 신규 공제번호 생성: ${newId}` : `신규 공제번호 생성: ${newId}`);
+      return;
     }
+
+    // 작성중 selected → 기존 건 업데이트 (정산년월·영업점·총인건비 모두 form 값 반영)
+    setMasters(prev => prev.map(m => m.id === selected.id ? {
+      ...m,
+      yearMonth: fYearMonth,
+      storeCode: store.code,
+      storeName: store.name,
+      totalLaborCost: cost,
+    } : m));
+    alert('수정되었습니다.');
   };
 
   const handleRegenerate = () => {
     if (!selected) return alert('재생성할 공제정보를 선택하세요.');
-    if (selected.status === '확정') return alert('확정된 건은 재생성할 수 없습니다.');
-    if (!confirm('매입처 설정(유형/점유율/공제액)은 유지하고 매출·최종매출·공제액만 초기화합니다.')) return;
+    if (!confirm('매입처 설정(유형/점유율/공제액)은 유지하고 매출·매출제외만 0으로 초기화합니다.')) return;
     setMasters(prev => prev.map(m => m.id !== selected.id ? m : ({
       ...m,
       suppliers: m.suppliers.map(s => ({ ...s, sales: 0, excludeSales: 0 })),
@@ -599,17 +614,17 @@ export default function StorePartDeductionRegistrationPage() {
           <div className="erp-form-grid" style={{ gridTemplateColumns: '90px 140px 90px 140px 90px 160px 1fr' }}>
             <div className="erp-form-label">정산년월<span className="required">*</span></div>
             <div className="erp-form-cell">
-              <input type="month" className="erp-input" style={{ width: '100%' }} value={fYearMonth} onChange={e => setFYearMonth(e.target.value)} disabled={!!selected && selected.status === '확정'} />
+              <input type="month" className="erp-input" style={{ width: '100%' }} value={fYearMonth} onChange={e => setFYearMonth(e.target.value)} />
             </div>
             <div className="erp-form-label">영업점<span className="required">*</span></div>
             <div className="erp-form-cell">
-              <select className="erp-select-trigger" style={{ width: '100%' }} value={fStore} onChange={e => setFStore(e.target.value)} disabled={!!selected && selected.status === '확정'}>
+              <select className="erp-select-trigger" style={{ width: '100%' }} value={fStore} onChange={e => setFStore(e.target.value)}>
                 {STORE_LIST.map(s => <option key={s.code}>{s.name}</option>)}
               </select>
             </div>
             <div className="erp-form-label">총인건비<span className="required">*</span></div>
             <div className="erp-form-cell">
-              <input type="text" className="erp-input" style={{ width: '100%', textAlign: 'right' }} value={fLaborCost ? fmtNum(Number(fLaborCost.replace(/,/g,''))) : ''} onChange={e => setFLaborCost(e.target.value.replace(/[^\d]/g, ''))} disabled={!!selected && selected.status === '확정'} placeholder="공급가" />
+              <input type="text" className="erp-input" style={{ width: '100%', textAlign: 'right' }} value={fLaborCost ? fmtNum(Number(fLaborCost.replace(/,/g,''))) : ''} onChange={e => setFLaborCost(e.target.value.replace(/[^\d]/g, ''))} placeholder="공급가" />
             </div>
             <div className="erp-form-cell" style={{ justifyContent: 'flex-end', gap: 4, paddingRight: 8 }}>
               <button className="erp-btn-header" onClick={handleFormReset}>초기화</button>
