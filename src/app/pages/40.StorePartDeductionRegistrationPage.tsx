@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
 import * as XLSX from 'xlsx';
-import { Calendar } from 'lucide-react';
 import {
   MOCK_DEDUCTION_MASTERS,
   STORE_LIST,
@@ -11,8 +10,10 @@ import {
   getAllStoreSupplierSales,
   getSupplierMaster,
 } from '../../data/mockStorePartDeduction';
-import { calcDeduction, TYPE_LABEL, roundWon } from '../../utils/deductionCalc';
+import { calcDeduction, TYPE_LABEL } from '../../utils/deductionCalc';
 import { SupplierSearchModal } from '../components/SupplierSearchModal';
+
+const CURRENT_USER = { empNo: '2024001', name: '조준수' };
 
 type Status = '전체' | '작성중' | '확정';
 type DeductionType = 'N' | 'R' | 'A' | 'E';
@@ -203,7 +204,33 @@ export default function StorePartDeductionRegistrationPage() {
       type: 'N',
       sales: salesInfo?.sales || 0,
       excludeSales: salesInfo?.excludeSales || 0,
+      regDate: today(),
+      regEmpNo: CURRENT_USER.empNo,
+      regName: CURRENT_USER.name,
     };
+  };
+
+  /** 선택된 마스터의 매입처 목록을 갱신하면서 수정 감사 필드를 자동 기록 */
+  const updateSuppliers = (
+    updater: (suppliers: DeductionSupplier[]) => DeductionSupplier[],
+    options: { stampModified?: boolean; targetCodes?: string[] } = {},
+  ) => {
+    if (!selected) return;
+    const { stampModified = true, targetCodes } = options;
+    const apply = (m: DeductionMaster): DeductionMaster => {
+      if (m.id !== selected.id) return m;
+      const next = updater(m.suppliers);
+      if (!stampModified) return { ...m, suppliers: next };
+      const stamped = next.map(s => {
+        const wasChanged = targetCodes ? targetCodes.includes(s.code) : true;
+        const original = m.suppliers.find(o => o.code === s.code);
+        if (!wasChanged || !original || original === s) return s;
+        return { ...s, modDate: today(), modEmpNo: CURRENT_USER.empNo, modName: CURRENT_USER.name };
+      });
+      return { ...m, suppliers: stamped };
+    };
+    setMasters(prev => prev.map(apply));
+    setFiltered(prev => prev.map(apply));
   };
 
   /**
@@ -259,10 +286,9 @@ export default function StorePartDeductionRegistrationPage() {
     }
   };
 
-  /** 그리드에 매입처 행 추가 + 입력 필드 초기화 */
+  /** 그리드에 매입처 행 추가 + 입력 필드 초기화 (신규 행은 모달 시점/수정 stamp 안 함) */
   const addSupplierToGrid = (newSup: DeductionSupplier) => {
-    setMasters(prev => prev.map(m => m.id !== selected!.id ? m : { ...m, suppliers: [...m.suppliers, newSup] }));
-    setFiltered(prev => prev.map(m => m.id !== selected!.id ? m : { ...m, suppliers: [...m.suppliers, newSup] }));
+    updateSuppliers(list => [...list, newSup], { stampModified: false });
     setInpSupplierCode('');
     setInpSupplierName('');
   };
@@ -283,28 +309,19 @@ export default function StorePartDeductionRegistrationPage() {
     if (!canEditSuppliers || !checkedSups.length) return alert('적용할 매입처를 선택하세요.');
     const rate = Number(inpRate) / 100;
     const amount = Number(inpAmount.replace(/,/g, '')) || 0;
-    setMasters(prev => prev.map(m => m.id !== selected!.id ? m : {
-      ...m,
-      suppliers: m.suppliers.map(s => {
-        if (!checkedSups.includes(s.code)) return s;
-        const upd: DeductionSupplier = { ...s };
-        if (chkType) upd.type = inpType;
-        if (chkRate && upd.type === 'R') upd.fixedRate = rate;
-        if (chkAmount && upd.type === 'A') upd.fixedAmount = amount;
-        return upd;
-      }),
-    }));
-    setFiltered(prev => prev.map(m => m.id !== selected!.id ? m : {
-      ...m,
-      suppliers: m.suppliers.map(s => {
-        if (!checkedSups.includes(s.code)) return s;
-        const upd: DeductionSupplier = { ...s };
-        if (chkType) upd.type = inpType;
-        if (chkRate && upd.type === 'R') upd.fixedRate = rate;
-        if (chkAmount && upd.type === 'A') upd.fixedAmount = amount;
-        return upd;
-      }),
-    }));
+    updateSuppliers(list => list.map(s => {
+      if (!checkedSups.includes(s.code)) return s;
+      const upd: DeductionSupplier = { ...s };
+      if (chkType) {
+        upd.type = inpType;
+        // 유형 전환 시 비호환 필드 초기화
+        if (inpType !== 'R') upd.fixedRate = undefined;
+        if (inpType !== 'A') upd.fixedAmount = undefined;
+      }
+      if (chkRate && upd.type === 'R') upd.fixedRate = rate;
+      if (chkAmount && upd.type === 'A') upd.fixedAmount = amount;
+      return upd;
+    }), { targetCodes: checkedSups });
     alert(`${checkedSups.length}건 일괄적용 완료.`);
   };
 
@@ -317,23 +334,9 @@ export default function StorePartDeductionRegistrationPage() {
     if (!canEditSuppliers) return;
     if (!confirm('정산년월 기준 전월 매출을 DW에서 일괄 조회하여 매출금액 컬럼에 반영합니다. (기존 매출제외금액은 유지)')) return;
     const storeSales = getAllStoreSupplierSales(selected!.storeCode);
-    setMasters(prev => prev.map(m => m.id !== selected!.id ? m : {
-      ...m,
-      suppliers: m.suppliers.map(s => {
-        const fromDW = storeSales[s.code];
-        return fromDW
-          ? { ...s, sales: fromDW.sales }
-          : s; // DW에 없으면 기존값 유지
-      }),
-    }));
-    setFiltered(prev => prev.map(m => m.id !== selected!.id ? m : {
-      ...m,
-      suppliers: m.suppliers.map(s => {
-        const fromDW = storeSales[s.code];
-        return fromDW
-          ? { ...s, sales: fromDW.sales }
-          : s;
-      }),
+    updateSuppliers(list => list.map(s => {
+      const fromDW = storeSales[s.code];
+      return fromDW ? { ...s, sales: fromDW.sales } : s;
     }));
     alert('매출이 반영되었습니다.');
   };
@@ -366,10 +369,12 @@ export default function StorePartDeductionRegistrationPage() {
             type: 'N',
             sales,
             excludeSales: 0,
+            regDate: today(),
+            regEmpNo: CURRENT_USER.empNo,
+            regName: CURRENT_USER.name,
           });
         });
-        setMasters(prev => prev.map(m => m.id !== selected!.id ? m : { ...m, suppliers: [...m.suppliers, ...newSups] }));
-        setFiltered(prev => prev.map(m => m.id !== selected!.id ? m : { ...m, suppliers: [...m.suppliers, ...newSups] }));
+        updateSuppliers(list => [...list, ...newSups], { stampModified: false });
         alert(`${newSups.length}건 등록.`);
       } catch { alert('엑셀 파일 파싱 실패.'); }
       finally { if (fileInputRef.current) fileInputRef.current.value = ''; }
@@ -405,9 +410,27 @@ export default function StorePartDeductionRegistrationPage() {
   const handleSupDelete = () => {
     if (!canEditSuppliers || !checkedSups.length) return alert('삭제할 매입처를 선택하세요.');
     if (!confirm(`${checkedSups.length}건을 삭제하시겠습니까?`)) return;
-    setMasters(prev => prev.map(m => m.id !== selected!.id ? m : { ...m, suppliers: m.suppliers.filter(s => !checkedSups.includes(s.code)) }));
-    setFiltered(prev => prev.map(m => m.id !== selected!.id ? m : { ...m, suppliers: m.suppliers.filter(s => !checkedSups.includes(s.code)) }));
+    updateSuppliers(list => list.filter(s => !checkedSups.includes(s.code)), { stampModified: false });
     setCheckedSups([]);
+  };
+
+  /** 인라인 매입처 수정 (유형/점유율/공제액/매출제외금액) */
+  const updateOneSupplier = (code: string, patch: Partial<DeductionSupplier>) => {
+    if (!canEditSuppliers) return;
+    updateSuppliers(list => list.map(s => {
+      if (s.code !== code) return s;
+      const next: DeductionSupplier = { ...s, ...patch };
+      // 유형 변경 시 비호환 필드 초기화
+      if (patch.type && patch.type !== 'R') next.fixedRate = undefined;
+      if (patch.type && patch.type !== 'A') next.fixedAmount = undefined;
+      return next;
+    }), { targetCodes: [code] });
+  };
+
+  /** 비고(note) 업데이트 — 마스터 그리드에서 인라인 입력 */
+  const handleNoteChange = (id: string, note: string) => {
+    setMasters(prev => prev.map(m => m.id === id ? { ...m, note } : m));
+    setFiltered(prev => prev.map(m => m.id === id ? { ...m, note } : m));
   };
 
   // ===================== 렌더 =====================
@@ -512,7 +535,17 @@ export default function StorePartDeductionRegistrationPage() {
                     <td style={{ textAlign: 'center' }}>{m.regDate}</td>
                     <td style={{ textAlign: 'center' }}>{m.regEmpNo}</td>
                     <td style={{ textAlign: 'center' }}>{m.regName}</td>
-                    <td>{m.note}</td>
+                    <td onClick={e => e.stopPropagation()}>
+                      <input
+                        type="text"
+                        className="erp-input"
+                        style={{ width: '100%', minWidth: 120 }}
+                        value={m.note || ''}
+                        disabled={m.status === '확정'}
+                        onChange={e => handleNoteChange(m.id, e.target.value)}
+                        placeholder={m.status === '확정' ? '' : '메모 입력'}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -628,17 +661,71 @@ export default function StorePartDeductionRegistrationPage() {
                     <td>{r.name}</td>
                     <td style={{ textAlign: 'center' }}>{r.itemCode}</td>
                     <td>{r.itemName}</td>
-                    <td style={{ textAlign: 'center' }}>{TYPE_LABEL[r.type]}{r.type === 'R' && r.fixedRate ? ` (${(r.fixedRate * 100).toFixed(1)}%)` : ''}{r.type === 'A' && r.fixedAmount ? ` (${fmtNum(r.fixedAmount)})` : ''}</td>
+                    <td style={{ textAlign: 'center', padding: 2 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <select
+                          className="erp-select-trigger"
+                          style={{ width: '100%' }}
+                          value={r.type}
+                          disabled={!canEditSuppliers}
+                          onChange={e => updateOneSupplier(r.code, { type: e.target.value as DeductionType })}
+                        >
+                          <option value="N">일반</option>
+                          <option value="R">고정점유율</option>
+                          <option value="A">고정공제</option>
+                          <option value="E">제외</option>
+                        </select>
+                        {r.type === 'R' && (
+                          <input
+                            className="erp-input"
+                            style={{ width: '100%', textAlign: 'right' }}
+                            placeholder="%"
+                            value={r.fixedRate ? (r.fixedRate * 100).toFixed(2) : ''}
+                            disabled={!canEditSuppliers}
+                            onChange={e => {
+                              const v = e.target.value.replace(/[^\d.]/g, '');
+                              updateOneSupplier(r.code, { fixedRate: v ? Number(v) / 100 : undefined });
+                            }}
+                          />
+                        )}
+                        {r.type === 'A' && (
+                          <input
+                            className="erp-input"
+                            style={{ width: '100%', textAlign: 'right' }}
+                            placeholder="공제액"
+                            value={r.fixedAmount ? fmtNum(r.fixedAmount) : ''}
+                            disabled={!canEditSuppliers}
+                            onChange={e => {
+                              const v = e.target.value.replace(/[^\d]/g, '');
+                              updateOneSupplier(r.code, { fixedAmount: v ? Number(v) : undefined });
+                            }}
+                          />
+                        )}
+                      </div>
+                    </td>
                     <td style={{ textAlign: 'right' }}>{fmtNum(r.sales)}</td>
-                    <td style={{ textAlign: 'right' }}>{fmtNum(r.excludeSales)}</td>
+                    <td style={{ textAlign: 'right', padding: 2 }}>
+                      <input
+                        className="erp-input"
+                        style={{ width: '100%', textAlign: 'right' }}
+                        value={r.excludeSales ? fmtNum(r.excludeSales) : ''}
+                        disabled={!canEditSuppliers}
+                        onChange={e => {
+                          const v = e.target.value.replace(/[^\d]/g, '');
+                          updateOneSupplier(r.code, { excludeSales: v ? Number(v) : 0 });
+                        }}
+                      />
+                    </td>
                     <td style={{ textAlign: 'right' }}>{fmtNum(r.finalSales)}</td>
                     <td style={{ textAlign: 'right' }}>{r.ratePct > 0 ? r.ratePct.toFixed(4) : '-'}</td>
                     <td style={{ textAlign: 'right', fontWeight: 700 }}>{r.type === 'E' ? '-' : fmtNum(r.deduction)}</td>
                     <td style={{ textAlign: 'center' }}>{selected?.status}</td>
-                    <td style={{ textAlign: 'center' }}>{selected?.regDate}</td>
-                    <td style={{ textAlign: 'center' }}>{selected?.regEmpNo}</td>
-                    <td style={{ textAlign: 'center' }}>{selected?.regName}</td>
-                    <td></td><td></td><td></td>
+                    <td style={{ textAlign: 'center' }}>{r.regDate || '-'}</td>
+                    <td style={{ textAlign: 'center' }}>{r.regEmpNo || '-'}</td>
+                    <td style={{ textAlign: 'center' }}>{r.regName || '-'}</td>
+                    <td style={{ textAlign: 'center' }}>{r.modDate || '-'}</td>
+                    <td style={{ textAlign: 'center' }}>{r.modEmpNo || '-'}</td>
+                    <td style={{ textAlign: 'center' }}>{r.modName || '-'}</td>
                   </tr>
                 ))}
                 {rows.length > 0 && (

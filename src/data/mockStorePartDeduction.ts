@@ -9,6 +9,13 @@ export interface DeductionSupplier {
   excludeSales: number;
   fixedRate?: number;
   fixedAmount?: number;
+  // 매입처 행 단위 감사 필드 (스토리보드: 추가 시점 / 수정 시점 자동 기록)
+  regDate?: string;
+  regEmpNo?: string;
+  regName?: string;
+  modDate?: string;
+  modEmpNo?: string;
+  modName?: string;
 }
 
 export interface DeductionMaster {
@@ -195,7 +202,7 @@ export const MOCK_DEDUCTION_MASTERS: DeductionMaster[] = [
     storeCode: '012',
     storeName: '창원점',
     totalLaborCost: 3590689,
-    status: '작성중',
+    status: '확정',
     finalConfirmed: 'N',
     ifasSent: 'N',
     ifasSentDate: '',
@@ -205,7 +212,7 @@ export const MOCK_DEDUCTION_MASTERS: DeductionMaster[] = [
     finalConfirmDate: '',
     finalConfirmEmpNo: '',
     finalConfirmName: '',
-    note: '',
+    note: '확정 데모용 (창원점)',
     suppliers: [
       { code: '0803080', name: '위드에버상사', itemCode: 'IC003180', itemName: '위드에버상사 대표상품', type: 'N', sales: 6808990, excludeSales: 0 },
       { code: '0803527', name: '프론티어통상', itemCode: 'IC003627', itemName: '프론티어통상 일반', type: 'N', sales: 5409300, excludeSales: 0 },
