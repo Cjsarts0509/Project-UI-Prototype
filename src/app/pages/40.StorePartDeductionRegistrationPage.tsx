@@ -207,17 +207,38 @@ export default function StorePartDeductionRegistrationPage() {
    * (현재 선택된 공제정보의 점포 기준)
    */
   /**
-   * 매입처 추가 시: 매입처코드/매입처명 + 기본 매입처품목('일반')만 채우고
-   * 매출/매출제외는 0으로 둠 (사용자가 [매출조회] 클릭해야 채워짐).
+   * 매입처 추가 시: 매입처코드/매입처명 + 사용 가능한 매입처품목 자동 채번
+   * - 기본 '일반'부터 시도하되, 이미 등록되어있으면 카탈로그의 다음 품목 순서대로 선택
+   * - 모든 품목이 이미 등록되었거나 카탈로그에 없는 코드면 null
+   * - 매출/매출제외는 0 (사용자가 [매출조회]/[파일등록] 클릭 후 채워짐)
    */
   const buildSupplierRow = (code: string, nameHint?: string): DeductionSupplier | null => {
     if (!selected) return null;
     const master = getSupplierMaster(code);
+    const items = getSupplierItems(code);
+    const usedItemCodes = new Set(
+      selected.suppliers.filter(s => s.code === code).map(s => s.itemCode)
+    );
+
+    let chosenItemCode: string;
+    let chosenItemName: string;
+    if (items.length > 0) {
+      const item = items.find(it => !usedItemCodes.has(it.itemCode));
+      if (!item) return null; // 카탈로그의 모든 품목 사용 중
+      chosenItemCode = item.itemCode;
+      chosenItemName = item.itemName;
+    } else {
+      const last4 = (code.replace(/\D/g, '').slice(-4) || '0000').padStart(4, '0');
+      chosenItemCode = `IC0${last4}00`;
+      chosenItemName = `${master?.name || nameHint || '매입처'} 일반`;
+      if (usedItemCodes.has(chosenItemCode)) return null;
+    }
+
     return {
       code,
       name: master?.name || nameHint || `매입처-${code}`,
-      itemCode: master?.itemCode || 'IC' + code.slice(-4) + '00',
-      itemName: master?.itemName || `${master?.name || nameHint || '매입처'} 일반`,
+      itemCode: chosenItemCode,
+      itemName: chosenItemName,
       type: 'N',
       sales: 0,
       excludeSales: 0,
@@ -261,10 +282,8 @@ export default function StorePartDeductionRegistrationPage() {
     const code = inpSupplierCode.trim();
     if (allowedSupplierCodes.includes(code)) {
       const newSup = buildSupplierRow(code);
-      if (!newSup) return;
-      // 동일 (매입처+매입처품목) 이미 등록되었는지 체크
-      if (selected!.suppliers.some(s => s.code === newSup.code && s.itemCode === newSup.itemCode)) {
-        alert('이미 동일 매입처품목으로 등록된 행이 있습니다. 다른 품목을 선택하려면 그리드의 매입처품목 dropdown을 사용하세요.');
+      if (!newSup) {
+        alert('해당 매입처의 모든 매입처품목이 이미 등록되어 있습니다.');
         return;
       }
       addSupplierToGrid(newSup);
@@ -275,9 +294,6 @@ export default function StorePartDeductionRegistrationPage() {
 
   /**
    * 매입처명 조회 (다른 화면과 동일한 패턴)
-   * - 이름 비어있음 → 모달 오픈
-   * - 현재 점포의 매입처 리스트 중 이름 일치 1건 → 바로 그리드에 추가
-   * - 불일치/다수 → 모달 오픈
    */
   const handleSupplierNameSearch = () => {
     if (!canEditSuppliers) return alert('공제정보를 먼저 저장 후 매입처를 추가할 수 있습니다. (확정 건은 불가)');
@@ -289,9 +305,8 @@ export default function StorePartDeductionRegistrationPage() {
     if (candidates.length === 1) {
       const match = candidates[0];
       const newSup = buildSupplierRow(match.code);
-      if (!newSup) return;
-      if (selected!.suppliers.some(s => s.code === newSup.code && s.itemCode === newSup.itemCode)) {
-        alert('이미 동일 매입처품목으로 등록된 행이 있습니다.');
+      if (!newSup) {
+        alert('해당 매입처의 모든 매입처품목이 이미 등록되어 있습니다.');
         return;
       }
       addSupplierToGrid(newSup);
@@ -311,9 +326,8 @@ export default function StorePartDeductionRegistrationPage() {
   const handleSupplierSelect = (item: { code: string; name: string }) => {
     if (!canEditSuppliers) return;
     const newSup = buildSupplierRow(item.code, item.name);
-    if (!newSup) return;
-    if (selected!.suppliers.some(s => s.code === newSup.code && s.itemCode === newSup.itemCode)) {
-      alert('이미 동일 매입처품목으로 등록된 행이 있습니다.');
+    if (!newSup) {
+      alert('해당 매입처의 모든 매입처품목이 이미 등록되어 있습니다.');
       return;
     }
     addSupplierToGrid(newSup);
@@ -416,30 +430,47 @@ export default function StorePartDeductionRegistrationPage() {
 
           const master = getSupplierMaster(code);
           const items = getSupplierItems(code);
-          let item = items[0]; // 일반(기본)
-          if (itemCodeKey && items.length > 0) {
-            const wantCode = String(r[itemCodeKey] || '').trim();
-            const found = items.find(it => it.itemCode === wantCode);
-            if (found) item = found;
-          }
-          const last4 = (code.replace(/\D/g, '').slice(-4) || '0000').padStart(4, '0');
           const fallbackItemName = itemNameKey ? String(r[itemNameKey] || '').trim() : '';
-          const itemCode = item?.itemCode || `IC0${last4}00`;
+          // 이미 사용 중인 매입처품목코드 (그리드 + 이번 업로드에서 추가될 행들)
+          const usedItemCodes = new Set([
+            ...selected!.suppliers.filter(s => s.code === code).map(s => s.itemCode),
+            ...newSups.filter(s => s.code === code).map(s => s.itemCode),
+          ]);
 
-          // (매입처+매입처품목) 조합으로 중복 체크
-          if (
-            selected!.suppliers.some(s => s.code === code && s.itemCode === itemCode) ||
-            newSups.some(s => s.code === code && s.itemCode === itemCode)
-          ) {
-            skipDup++;
-            return;
+          // 1) 파일에 매입처품목코드가 있고 카탈로그에 매칭되면 그 품목 사용
+          let chosenItemCode: string | null = null;
+          let chosenItemName = '';
+          if (itemCodeKey) {
+            const wantCode = String(r[itemCodeKey] || '').trim();
+            if (wantCode) {
+              const found = items.find(it => it.itemCode === wantCode);
+              if (found) {
+                if (usedItemCodes.has(found.itemCode)) { skipDup++; return; }
+                chosenItemCode = found.itemCode;
+                chosenItemName = found.itemName;
+              }
+            }
+          }
+          // 2) 못 골랐으면 카탈로그에서 사용 안 한 첫 품목(채번순)
+          if (!chosenItemCode) {
+            if (items.length > 0) {
+              const next = items.find(it => !usedItemCodes.has(it.itemCode));
+              if (!next) { skipDup++; return; }
+              chosenItemCode = next.itemCode;
+              chosenItemName = next.itemName;
+            } else {
+              const last4 = (code.replace(/\D/g, '').slice(-4) || '0000').padStart(4, '0');
+              chosenItemCode = `IC0${last4}00`;
+              chosenItemName = fallbackItemName || `${master?.name || nameFromFile || '매입처'} 일반`;
+              if (usedItemCodes.has(chosenItemCode)) { skipDup++; return; }
+            }
           }
 
           newSups.push({
             code,
             name: master?.name || nameFromFile || `매입처-${code}`,
-            itemCode,
-            itemName: item?.itemName || fallbackItemName || `${master?.name || nameFromFile || '매입처'} 일반`,
+            itemCode: chosenItemCode,
+            itemName: chosenItemName,
             type: 'N',
             sales,
             excludeSales,
