@@ -21,6 +21,11 @@ type DeductionType = 'N' | 'R' | 'A' | 'E';
 const today = () => new Date().toISOString().slice(0, 10);
 const currentYm = () => new Date().toISOString().slice(0, 7);
 const fmtNum = (n: number) => (n || 0).toLocaleString('ko-KR');
+// 고정점유율 (소수점 2자리까지) 표시 — float 오차 제거
+const fmtRateInput = (rate?: number): string => {
+  if (rate === undefined || rate === null) return '';
+  return String(Math.round(rate * 10000) / 100);
+};
 
 export default function StorePartDeductionRegistrationPage() {
   // ── 1. 조회 영역
@@ -51,6 +56,9 @@ export default function StorePartDeductionRegistrationPage() {
 
   // ── 5. 매입처 그리드
   const [checkedSups, setCheckedSups] = useState<string[]>([]);
+  // 점유율/공제액 입력 중 raw 텍스트 (commit 전 표시용)
+  const [rateDrafts, setRateDrafts] = useState<Record<string, string>>({});
+  const [amountDrafts, setAmountDrafts] = useState<Record<string, string>>({});
 
   // ── 6. 매입처 조회 모달
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
@@ -751,46 +759,18 @@ export default function StorePartDeductionRegistrationPage() {
                       })()}
                     </td>
                     <td style={{ textAlign: 'center', padding: 2 }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <select
-                          className="erp-select-trigger"
-                          style={{ width: '100%' }}
-                          value={r.type}
-                          disabled={!canEditSuppliers}
-                          onChange={e => updateOneSupplier(r.code, { type: e.target.value as DeductionType })}
-                        >
-                          <option value="N">일반</option>
-                          <option value="R">고정점유율</option>
-                          <option value="A">고정공제</option>
-                          <option value="E">제외</option>
-                        </select>
-                        {r.type === 'R' && (
-                          <input
-                            className="erp-input"
-                            style={{ width: '100%', textAlign: 'right' }}
-                            placeholder="%"
-                            value={r.fixedRate ? (r.fixedRate * 100).toFixed(2) : ''}
-                            disabled={!canEditSuppliers}
-                            onChange={e => {
-                              const v = e.target.value.replace(/[^\d.]/g, '');
-                              updateOneSupplier(r.code, { fixedRate: v ? Number(v) / 100 : undefined });
-                            }}
-                          />
-                        )}
-                        {r.type === 'A' && (
-                          <input
-                            className="erp-input"
-                            style={{ width: '100%', textAlign: 'right' }}
-                            placeholder="공제액"
-                            value={r.fixedAmount ? fmtNum(r.fixedAmount) : ''}
-                            disabled={!canEditSuppliers}
-                            onChange={e => {
-                              const v = e.target.value.replace(/[^\d]/g, '');
-                              updateOneSupplier(r.code, { fixedAmount: v ? Number(v) : undefined });
-                            }}
-                          />
-                        )}
-                      </div>
+                      <select
+                        className="erp-select-trigger"
+                        style={{ width: '100%' }}
+                        value={r.type}
+                        disabled={!canEditSuppliers}
+                        onChange={e => updateOneSupplier(r.code, { type: e.target.value as DeductionType })}
+                      >
+                        <option value="N">일반</option>
+                        <option value="R">고정점유율</option>
+                        <option value="A">고정공제</option>
+                        <option value="E">제외</option>
+                      </select>
                     </td>
                     <td style={{ textAlign: 'right' }}>{fmtNum(r.sales)}</td>
                     <td style={{ textAlign: 'right', padding: 2 }}>
@@ -806,8 +786,59 @@ export default function StorePartDeductionRegistrationPage() {
                       />
                     </td>
                     <td style={{ textAlign: 'right' }}>{fmtNum(r.finalSales)}</td>
-                    <td style={{ textAlign: 'right' }}>{r.ratePct > 0 ? r.ratePct.toFixed(4) : '-'}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700 }}>{r.type === 'E' ? '-' : fmtNum(r.deduction)}</td>
+                    <td style={{ textAlign: 'right', padding: r.type === 'R' ? 2 : undefined }}>
+                      {r.type === 'R' ? (
+                        <input
+                          type="text"
+                          className="erp-input"
+                          style={{ width: '100%', textAlign: 'right' }}
+                          placeholder="%"
+                          value={rateDrafts[r.code] ?? fmtRateInput(r.fixedRate)}
+                          disabled={!canEditSuppliers}
+                          onChange={e => {
+                            const v = e.target.value;
+                            if (v === '') {
+                              setRateDrafts(p => ({ ...p, [r.code]: '' }));
+                              updateOneSupplier(r.code, { fixedRate: undefined });
+                              return;
+                            }
+                            // 정수 3자리 + 소수점 2자리까지만 허용
+                            if (!/^\d{0,3}(\.\d{0,2})?$/.test(v)) return;
+                            setRateDrafts(p => ({ ...p, [r.code]: v }));
+                            const num = Number(v);
+                            if (isFinite(num)) updateOneSupplier(r.code, { fixedRate: num / 100 });
+                          }}
+                          onBlur={() => setRateDrafts(p => {
+                            const c = { ...p }; delete c[r.code]; return c;
+                          })}
+                        />
+                      ) : (
+                        r.ratePct > 0 ? r.ratePct.toFixed(4) : '-'
+                      )}
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, padding: r.type === 'A' ? 2 : undefined }}>
+                      {r.type === 'A' ? (
+                        <input
+                          type="text"
+                          className="erp-input"
+                          style={{ width: '100%', textAlign: 'right', fontWeight: 700 }}
+                          placeholder="공제액"
+                          value={amountDrafts[r.code] ?? (r.fixedAmount ? fmtNum(r.fixedAmount) : '')}
+                          disabled={!canEditSuppliers}
+                          onChange={e => {
+                            const raw = e.target.value.replace(/[^\d]/g, '');
+                            const display = raw ? fmtNum(Number(raw)) : '';
+                            setAmountDrafts(p => ({ ...p, [r.code]: display }));
+                            updateOneSupplier(r.code, { fixedAmount: raw ? Number(raw) : undefined });
+                          }}
+                          onBlur={() => setAmountDrafts(p => {
+                            const c = { ...p }; delete c[r.code]; return c;
+                          })}
+                        />
+                      ) : (
+                        r.type === 'E' ? '-' : fmtNum(r.deduction)
+                      )}
+                    </td>
                     <td style={{ textAlign: 'center' }}>{selected?.status}</td>
                     <td style={{ textAlign: 'center' }}>{r.regDate || '-'}</td>
                     <td style={{ textAlign: 'center' }}>{r.regEmpNo || '-'}</td>
