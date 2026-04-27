@@ -345,7 +345,21 @@ const SUPPLIER_MASTER: SupplierMaster[] = ([
 .concat(([
   // 해외문구
   ['0900216', 'LEUCHTTURM'], ['0900224', 'LIHIT LAB.,INC'], ['0900252', 'HIGHTIDE CO.,LTD'],
-] as [string, string][]).map(([code, name]) => ({ code, name, division: '해외문구' as const, items: makeItems(code, name, '해외문구') })));
+] as [string, string][]).map(([code, name]) => ({ code, name, division: '해외문구' as const, items: makeItems(code, name, '해외문구') })))
+.concat(([
+  // 창원점 전용 (또는 기타 — 일반 단일품목)
+  ['0803176', '라이브워크'],
+  ['0817560', '도나앤데코'],
+  ['0806606', '디자인랩(레더랩)'],
+  ['0803229', '웨이크업(wakup)'],
+  ['0803288', '명성코리아'],
+] as [string, string][]).map(([code, name]) => ({
+  code, name, division: '문구' as const,
+  items: [{
+    itemCode: 'IC0' + code.replace(/\D/g, '').slice(-4).padStart(4, '0') + '00',
+    itemName: name + ' 일반',
+  }],
+})));
 
 /**
  * 점포별 매입처 코드 리스트 (핵심 5개 점포)
@@ -390,6 +404,20 @@ function hashSales(storeCode: string, supplierCode: string, base: number, varian
   return Math.max(0, Math.round(raw / 10000) * 10000);
 }
 
+/**
+ * 사용자 지정 매출 — 해시 결과를 덮어쓰는 화이트리스트
+ * (실데이터 기반 시연 케이스)
+ */
+const SALES_OVERRIDES: Record<string, Record<string, StoreSupplierSales>> = {
+  '012': {
+    '0803176': { sales: 2223710, excludeSales: 0 },
+    '0817560': { sales: 1429400, excludeSales: 0 },
+    '0806606': { sales: 877500,  excludeSales: 0 },
+    '0803229': { sales: 227600,  excludeSales: 0 },
+    '0803288': { sales: 166950,  excludeSales: 0 },
+  },
+};
+
 const STORE_SUPPLIER_SALES_MAP: Record<string, Record<string, StoreSupplierSales>> = (() => {
   const map: Record<string, Record<string, StoreSupplierSales>> = {};
   DEDUCTION_TARGET_STORES.forEach(storeCode => {
@@ -411,6 +439,10 @@ const STORE_SUPPLIER_SALES_MAP: Record<string, Record<string, StoreSupplierSales
       const exHash = (code.charCodeAt(code.length - 1) + storeCode.charCodeAt(2)) % 10;
       const excludeSales = exHash === 0 ? Math.round(sales * 0.15 / 10000) * 10000 : 0;
       map[storeCode][code] = { sales, excludeSales };
+    });
+    // 화이트리스트 적용
+    Object.entries(SALES_OVERRIDES[storeCode] || {}).forEach(([code, vals]) => {
+      map[storeCode][code] = vals;
     });
   });
   return map;
