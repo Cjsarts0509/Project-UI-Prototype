@@ -848,17 +848,40 @@ export default function StorePartDeductionRegistrationPage() {
                     <td style={{ textAlign: 'center' }}>{r.modName || '-'}</td>
                   </tr>
                 ))}
-                {rows.length > 0 && (
-                  <tr style={{ backgroundColor: '#f3f4f6', fontWeight: 700 }}>
-                    <td colSpan={7} style={{ textAlign: 'center' }}>합계</td>
-                    <td style={{ textAlign: 'right' }}>{fmtNum(rows.reduce((a, r) => a + r.sales, 0))}</td>
-                    <td style={{ textAlign: 'right' }}>{fmtNum(rows.reduce((a, r) => a + r.excludeSales, 0))}</td>
-                    <td style={{ textAlign: 'right' }}>{fmtNum(rows.reduce((a, r) => a + r.finalSales, 0))}</td>
-                    <td></td>
-                    <td style={{ textAlign: 'right' }}>{fmtNum(rows.reduce((a, r) => a + (r.type === 'E' ? 0 : r.deduction), 0))}</td>
-                    <td colSpan={7}></td>
-                  </tr>
-                )}
+                {rows.length > 0 && (() => {
+                  const fixedSum = rows.filter(r => r.type === 'A').reduce((a, r) => a + r.deduction, 0);
+                  const ratedSum = rows.filter(r => r.type === 'R').reduce((a, r) => a + r.deduction, 0);
+                  const normals = rows.filter(r => r.type === 'N');
+                  const normalShare = (selected?.totalLaborCost || 0) - fixedSum - ratedSum;
+                  const normalTotalSales = normals.reduce((a, r) => a + r.finalSales, 0);
+                  const totalDed = rows.reduce((a, r) => a + (r.type === 'E' ? 0 : r.deduction), 0);
+                  return (
+                    <>
+                      {(fixedSum > 0 || ratedSum > 0) && (
+                        <tr style={{ backgroundColor: '#fefce8', fontSize: 11, color: '#854d0e' }}>
+                          <td colSpan={19} style={{ padding: '4px 8px' }}>
+                            <strong>공제 산출 근거</strong> &nbsp;|&nbsp;
+                            총인건비 {fmtNum(selected?.totalLaborCost || 0)}원
+                            {ratedSum > 0 && <> − 고정점유율(R) 합계 {fmtNum(ratedSum)}원</>}
+                            {fixedSum > 0 && <> − 고정공제(A) 합계 {fmtNum(fixedSum)}원</>}
+                            &nbsp;= <strong>일반형 분배목 {fmtNum(normalShare)}원</strong>
+                            &nbsp;|&nbsp; 일반형 총 최종매출 {fmtNum(normalTotalSales)}원
+                            &nbsp;→ 일반 매입처 공제 = (자사 최종매출 ÷ {fmtNum(normalTotalSales)}) × {fmtNum(normalShare)}
+                          </td>
+                        </tr>
+                      )}
+                      <tr style={{ backgroundColor: '#f3f4f6', fontWeight: 700 }}>
+                        <td colSpan={7} style={{ textAlign: 'center' }}>합계</td>
+                        <td style={{ textAlign: 'right' }}>{fmtNum(rows.reduce((a, r) => a + r.sales, 0))}</td>
+                        <td style={{ textAlign: 'right' }}>{fmtNum(rows.reduce((a, r) => a + r.excludeSales, 0))}</td>
+                        <td style={{ textAlign: 'right' }}>{fmtNum(rows.reduce((a, r) => a + r.finalSales, 0))}</td>
+                        <td></td>
+                        <td style={{ textAlign: 'right' }}>{fmtNum(totalDed)}</td>
+                        <td colSpan={7}></td>
+                      </tr>
+                    </>
+                  );
+                })()}
               </tbody>
             </table>
           </div>
