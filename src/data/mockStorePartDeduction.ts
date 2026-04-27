@@ -200,10 +200,10 @@ function hashSales(storeCode: string, supplierCode: string, base: number, varian
 }
 
 /**
- * 사용자 지정 매출 — 해시 결과를 덮어쓰는 화이트리스트
- * (실데이터 기반 시연 케이스)
+ * 사용자 지정 매입처 단위 매출 — 해시 결과를 덮어쓰는 화이트리스트
+ * (실데이터 기반 시연 케이스. 매입처품목 단위 분배는 아래 로직을 따른다)
  */
-const SALES_OVERRIDES: Record<string, Record<string, StoreSupplierSales>> = {
+const SUPPLIER_TOTAL_OVERRIDES: Record<string, Record<string, StoreSupplierSales>> = {
   '012': {
     '0803176': { sales: 2223710, excludeSales: 0 },
     '0817560': { sales: 1429400, excludeSales: 0 },
@@ -213,31 +213,52 @@ const SALES_OVERRIDES: Record<string, Record<string, StoreSupplierSales>> = {
   },
 };
 
-const STORE_SUPPLIER_SALES_MAP: Record<string, Record<string, StoreSupplierSales>> = (() => {
-  const map: Record<string, Record<string, StoreSupplierSales>> = {};
+/**
+ * 점포 × 매입처 × 매입처품목 매출 매트릭스
+ * 분배 규칙 (xlsx와 동일):
+ *   1품목: 100%
+ *   2품목 이상: 일반(첫 품목) 60%, 나머지 균등
+ */
+const STORE_SUPPLIER_ITEM_SALES_MAP: Record<string, Record<string, Record<string, StoreSupplierSales>>> = (() => {
+  const map: Record<string, Record<string, Record<string, StoreSupplierSales>>> = {};
+  const scale: Record<string, number> = {
+    '001': 1.0, '002': 0.75, '009': 0.55, '003': 0.45, '012': 0.30,
+  };
+  const round10k = (n: number) => Math.round(n / 10000) * 10000;
+
   DEDUCTION_TARGET_STORES.forEach(storeCode => {
     map[storeCode] = {};
-    // 점포별 매출 규모 — 광화문(큰점) > 강남 > 부산 > 잠실 > 창원(작은점)
-    const scale: Record<string, number> = {
-      '001': 1.0,
-      '002': 0.75,
-      '009': 0.55,
-      '003': 0.45,
-      '012': 0.30,
-    };
     const s = scale[storeCode] ?? 0.5;
     (STORE_SUPPLIER_CODES_MAP[storeCode] || []).forEach(code => {
-      const base = 3_000_000 * s;
-      const variance = 2_500_000 * s;
-      const sales = hashSales(storeCode, code, base, variance);
-      // 일부 매입처만 매출제외 (약 10%)
+      // 매입처 단위 합계 매출 (해시 또는 화이트리스트 override)
+      const override = SUPPLIER_TOTAL_OVERRIDES[storeCode]?.[code];
+      const totalSales = override
+        ? override.sales
+        : hashSales(storeCode, code, 3_000_000 * s, 2_500_000 * s);
+      // 매출제외 — override 있으면 그 값, 없으면 hash로 일부 매입처 ~10%
       const exHash = (code.charCodeAt(code.length - 1) + storeCode.charCodeAt(2)) % 10;
-      const excludeSales = exHash === 0 ? Math.round(sales * 0.15 / 10000) * 10000 : 0;
-      map[storeCode][code] = { sales, excludeSales };
-    });
-    // 화이트리스트 적용
-    Object.entries(SALES_OVERRIDES[storeCode] || {}).forEach(([code, vals]) => {
-      map[storeCode][code] = vals;
+      const totalExclude = override
+        ? override.excludeSales
+        : (exHash === 0 ? round10k(totalSales * 0.15) : 0);
+
+      // 매입처가 보유한 매입처품목 리스트 (카탈로그 기준)
+      const items = SUPPLIER_MASTER.find(sp => sp.code === code)?.items || [];
+      const itemSales: Record<string, StoreSupplierSales> = {};
+      if (items.length === 0) {
+        // 카탈로그에 없는 매입처(드물게) — 단일 fallback 키로 등록
+        const last4 = code.replace(/\D/g, '').slice(-4).padStart(4, '0');
+        itemSales[`IC0${last4}00`] = { sales: totalSales, excludeSales: totalExclude };
+      } else {
+        const n = items.length;
+        items.forEach((it, i) => {
+          const w = n === 1 ? 1 : (i === 0 ? 0.6 : 0.4 / (n - 1));
+          itemSales[it.itemCode] = {
+            sales: round10k(totalSales * w),
+            excludeSales: round10k(totalExclude * w),
+          };
+        });
+      }
+      map[storeCode][code] = itemSales;
     });
   });
   return map;
@@ -245,33 +266,39 @@ const STORE_SUPPLIER_SALES_MAP: Record<string, Record<string, StoreSupplierSales
 
 /**
  * [백엔드 API 시뮬레이션] 점포에 등록된 매입처 코드 리스트 조회
- * - 실제: GET /api/deduction/stores/{storeCode}/suppliers
  */
 export function getStoreSupplierCodes(storeCode: string): string[] {
   return STORE_SUPPLIER_CODES_MAP[storeCode] || [];
 }
 
 /**
- * [백엔드 API 시뮬레이션] 특정 점포 + 매입처의 매출/매출제외 조회
- * - 실제: GET /api/deduction/stores/{storeCode}/suppliers/{supplierCode}/sales?yearMonth=YYYY-MM
- * - 등록되지 않은 매입처인 경우 null 반환
+ * [백엔드 API 시뮬레이션] 점포 + 매입처 + 매입처품목 단위 매출 조회
+ * - 매출조회의 새 lookup 키: (storeCode, supplierCode, itemCode)
  */
-export function getStoreSupplierSales(
+export function getStoreSupplierItemSales(
   storeCode: string,
-  supplierCode: string
+  supplierCode: string,
+  itemCode: string,
 ): { sales: number; excludeSales: number } | null {
-  return STORE_SUPPLIER_SALES_MAP[storeCode]?.[supplierCode] || null;
+  return STORE_SUPPLIER_ITEM_SALES_MAP[storeCode]?.[supplierCode]?.[itemCode] || null;
 }
 
 /**
- * [백엔드 API 시뮬레이션] 점포의 전체 매입처 매출 일괄 조회
- * - 실제: [매출조회] 버튼 클릭 시 호출되는 API
- * - 기존 등록된 매입처들의 매출을 DW에서 일괄 조회하여 반영
+ * [백엔드 API 시뮬레이션] 점포의 전체 (매입처, 매입처품목) 매출 일괄 조회
+ * - 매입처품목 단위로 분배된 매출을 반환
+ * - 반환 키 형식: `${supplierCode}__${itemCode}`
  */
-export function getAllStoreSupplierSales(
+export function getAllStoreSupplierItemSales(
   storeCode: string
 ): Record<string, { sales: number; excludeSales: number }> {
-  return STORE_SUPPLIER_SALES_MAP[storeCode] || {};
+  const result: Record<string, StoreSupplierSales> = {};
+  const supMap = STORE_SUPPLIER_ITEM_SALES_MAP[storeCode] || {};
+  Object.entries(supMap).forEach(([supplierCode, items]) => {
+    Object.entries(items).forEach(([itemCode, vals]) => {
+      result[`${supplierCode}__${itemCode}`] = vals;
+    });
+  });
+  return result;
 }
 
 /**
