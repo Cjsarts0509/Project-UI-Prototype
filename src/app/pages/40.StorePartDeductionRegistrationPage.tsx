@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import {
-  MOCK_DEDUCTION_MASTERS,
   STORE_LIST,
   DeductionMaster,
   DeductionSupplier,
@@ -12,6 +11,7 @@ import {
 } from '../../data/mockStorePartDeduction';
 import { calcDeduction, TYPE_LABEL } from '../../utils/deductionCalc';
 import { SupplierSearchModal } from '../components/SupplierSearchModal';
+import { useDeductionStore } from '../../context/DeductionContext';
 
 const CURRENT_USER = { empNo: '2024001', name: '조준수' };
 
@@ -33,9 +33,17 @@ export default function StorePartDeductionRegistrationPage() {
   const [sStore, setSStore] = useState('전체');
   const [sStatus, setSStatus] = useState<Status>('전체');
 
-  // ── 2. 전체 마스터 데이터
-  const [masters, setMasters] = useState<DeductionMaster[]>(MOCK_DEDUCTION_MASTERS);
-  const [filtered, setFiltered] = useState<DeductionMaster[]>(MOCK_DEDUCTION_MASTERS);
+  // ── 2. 전체 마스터 데이터 (전역 컨텍스트 — 페이지 41과 동기화)
+  const { masters, setMasters } = useDeductionStore();
+  const [appliedFilter, setAppliedFilter] = useState<{ yearMonth: string; store: string; status: Status }>({
+    yearMonth: '', store: '전체', status: '전체',
+  });
+  const filtered = useMemo(() => masters.filter(m => {
+    if (appliedFilter.yearMonth && m.yearMonth !== appliedFilter.yearMonth) return false;
+    if (appliedFilter.store !== '전체' && m.storeName !== appliedFilter.store) return false;
+    if (appliedFilter.status !== '전체' && m.status !== appliedFilter.status) return false;
+    return true;
+  }), [masters, appliedFilter]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [checkedMasters, setCheckedMasters] = useState<string[]>([]);
 
@@ -87,13 +95,13 @@ export default function StorePartDeductionRegistrationPage() {
 
   // ===================== 핸들러: 조회 =====================
   const handleSearch = () => {
+    setAppliedFilter({ yearMonth: sYearMonth, store: sStore, status: sStatus });
     const list = masters.filter(m => {
       if (sYearMonth && m.yearMonth !== sYearMonth) return false;
       if (sStore !== '전체' && m.storeName !== sStore) return false;
       if (sStatus !== '전체' && m.status !== sStatus) return false;
       return true;
     });
-    setFiltered(list);
     if (list.length) {
       setSelectedId(list[0].id);
       setFYearMonth(list[0].yearMonth);
@@ -106,7 +114,7 @@ export default function StorePartDeductionRegistrationPage() {
     setSYearMonth(currentYm());
     setSStore('전체');
     setSStatus('전체');
-    setFiltered(masters);
+    setAppliedFilter({ yearMonth: '', store: '전체', status: '전체' });
   };
 
   // ===================== 핸들러: 공제정보 =====================
@@ -139,7 +147,6 @@ export default function StorePartDeductionRegistrationPage() {
     if (selected && selected.status !== '확정') {
       // 기존 건 업데이트
       setMasters(prev => prev.map(m => m.id === selected.id ? { ...m, totalLaborCost: cost } : m));
-      setFiltered(prev => prev.map(m => m.id === selected.id ? { ...m, totalLaborCost: cost } : m));
       alert('수정되었습니다.');
     } else {
       const newId = nextSeq(fYearMonth, store.code);
@@ -151,7 +158,6 @@ export default function StorePartDeductionRegistrationPage() {
         suppliers: [],
       };
       setMasters(prev => [newMaster, ...prev]);
-      setFiltered(prev => [newMaster, ...prev]);
       setSelectedId(newId);
       alert(`신규 공제번호 생성: ${newId}`);
     }
@@ -165,10 +171,6 @@ export default function StorePartDeductionRegistrationPage() {
       ...m,
       suppliers: m.suppliers.map(s => ({ ...s, sales: 0, excludeSales: 0 })),
     })));
-    setFiltered(prev => prev.map(m => m.id !== selected.id ? m : ({
-      ...m,
-      suppliers: m.suppliers.map(s => ({ ...s, sales: 0, excludeSales: 0 })),
-    })));
     alert('재생성되었습니다. [매출조회] 또는 [파일등록]을 눌러 매출을 반영하세요.');
   };
 
@@ -178,7 +180,6 @@ export default function StorePartDeductionRegistrationPage() {
     if (targets.some(m => m.status === '확정')) return alert('확정된 건은 삭제할 수 없습니다.');
     if (!confirm(`${targets.length}건을 삭제하시겠습니까?`)) return;
     setMasters(prev => prev.filter(m => !checkedMasters.includes(m.id)));
-    setFiltered(prev => prev.filter(m => !checkedMasters.includes(m.id)));
     if (selectedId && checkedMasters.includes(selectedId)) handleFormReset();
     setCheckedMasters([]);
   };
@@ -189,7 +190,6 @@ export default function StorePartDeductionRegistrationPage() {
     if (!selected.suppliers.length) return alert('매입처 정보가 없습니다.');
     if (!confirm('확정 후 매입처 정보는 수정·삭제가 불가합니다. 진행하시겠습니까?')) return;
     setMasters(prev => prev.map(m => m.id !== selected.id ? m : { ...m, status: '확정' as const }));
-    setFiltered(prev => prev.map(m => m.id !== selected.id ? m : { ...m, status: '확정' as const }));
     alert('확정되었습니다.');
   };
 
@@ -241,7 +241,6 @@ export default function StorePartDeductionRegistrationPage() {
       return { ...m, suppliers: stamped };
     };
     setMasters(prev => prev.map(apply));
-    setFiltered(prev => prev.map(apply));
   };
 
   /**
@@ -508,7 +507,6 @@ export default function StorePartDeductionRegistrationPage() {
   /** 비고(note) 업데이트 — 마스터 그리드에서 인라인 입력 */
   const handleNoteChange = (id: string, note: string) => {
     setMasters(prev => prev.map(m => m.id === id ? { ...m, note } : m));
-    setFiltered(prev => prev.map(m => m.id === id ? { ...m, note } : m));
   };
 
   // ===================== 렌더 =====================
