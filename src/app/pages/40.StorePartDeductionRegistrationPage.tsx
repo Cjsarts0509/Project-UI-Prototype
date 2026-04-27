@@ -29,6 +29,8 @@ const fmtRateInput = (rate?: number): string => {
   if (rate === undefined || rate === null) return '';
   return String(Math.round(rate * 10000) / 100);
 };
+// 매입처 그리드 행의 고유 키 — 한 매입처가 여러 품목을 가질 수 있으므로 (code + itemCode) 조합
+const rowKeyOf = (s: { code: string; itemCode: string }) => `${s.code}__${s.itemCode}`;
 
 export default function StorePartDeductionRegistrationPage() {
   // ── 1. 조회 영역
@@ -225,21 +227,21 @@ export default function StorePartDeductionRegistrationPage() {
     };
   };
 
-  /** 선택된 마스터의 매입처 목록을 갱신하면서 수정 감사 필드를 자동 기록 */
+  /** 선택된 마스터의 매입처 목록을 갱신하면서 수정 감사 필드를 자동 기록 (위치 기반 변경 감지) */
   const updateSuppliers = (
     updater: (suppliers: DeductionSupplier[]) => DeductionSupplier[],
-    options: { stampModified?: boolean; targetCodes?: string[] } = {},
+    options: { stampModified?: boolean } = {},
   ) => {
     if (!selected) return;
-    const { stampModified = true, targetCodes } = options;
+    const { stampModified = true } = options;
     const apply = (m: DeductionMaster): DeductionMaster => {
       if (m.id !== selected.id) return m;
       const next = updater(m.suppliers);
       if (!stampModified) return { ...m, suppliers: next };
-      const stamped = next.map(s => {
-        const wasChanged = targetCodes ? targetCodes.includes(s.code) : true;
-        const original = m.suppliers.find(o => o.code === s.code);
-        if (!wasChanged || !original || original === s) return s;
+      const stamped = next.map((s, i) => {
+        const original = m.suppliers[i];
+        // 새 행(원본 없음) 또는 동일 참조(미변경)는 stamp 안 함
+        if (!original || original === s) return s;
         return { ...s, modDate: today(), modEmpNo: CURRENT_USER.empNo, modName: CURRENT_USER.name };
       });
       return { ...m, suppliers: stamped };
@@ -257,15 +259,14 @@ export default function StorePartDeductionRegistrationPage() {
     if (!canEditSuppliers) return alert('공제정보를 먼저 저장 후 매입처를 추가할 수 있습니다. (확정 건은 불가)');
     if (!inpSupplierCode.trim()) { setIsSupplierModalOpen(true); return; }
     const code = inpSupplierCode.trim();
-    // 이미 그리드에 있는 매입처인지 체크
-    if (selected!.suppliers.some(s => s.code === code)) {
-      alert('이미 등록된 매입처입니다.');
-      return;
-    }
-    // 현재 점포의 매입처 리스트에 존재하는지 확인
     if (allowedSupplierCodes.includes(code)) {
       const newSup = buildSupplierRow(code);
       if (!newSup) return;
+      // 동일 (매입처+매입처품목) 이미 등록되었는지 체크
+      if (selected!.suppliers.some(s => s.code === newSup.code && s.itemCode === newSup.itemCode)) {
+        alert('이미 동일 매입처품목으로 등록된 행이 있습니다. 다른 품목을 선택하려면 그리드의 매입처품목 dropdown을 사용하세요.');
+        return;
+      }
       addSupplierToGrid(newSup);
     } else {
       setIsSupplierModalOpen(true);
@@ -282,25 +283,24 @@ export default function StorePartDeductionRegistrationPage() {
     if (!canEditSuppliers) return alert('공제정보를 먼저 저장 후 매입처를 추가할 수 있습니다. (확정 건은 불가)');
     if (!inpSupplierName.trim()) { setIsSupplierModalOpen(true); return; }
     const nameQuery = inpSupplierName.trim();
-    // 현재 점포에 속한 매입처 중 이름 매칭
     const candidates = allowedSupplierCodes
       .map(c => getSupplierMaster(c))
       .filter((m): m is NonNullable<typeof m> => !!m && m.name.includes(nameQuery));
     if (candidates.length === 1) {
       const match = candidates[0];
-      if (selected!.suppliers.some(s => s.code === match.code)) {
-        alert('이미 등록된 매입처입니다.');
-        return;
-      }
       const newSup = buildSupplierRow(match.code);
       if (!newSup) return;
+      if (selected!.suppliers.some(s => s.code === newSup.code && s.itemCode === newSup.itemCode)) {
+        alert('이미 동일 매입처품목으로 등록된 행이 있습니다.');
+        return;
+      }
       addSupplierToGrid(newSup);
     } else {
       setIsSupplierModalOpen(true);
     }
   };
 
-  /** 그리드에 매입처 행 추가 + 입력 필드 초기화 (신규 행은 모달 시점/수정 stamp 안 함) */
+  /** 그리드에 매입처 행 추가 + 입력 필드 초기화 (신규 행은 stamp 안 함) */
   const addSupplierToGrid = (newSup: DeductionSupplier) => {
     updateSuppliers(list => [...list, newSup], { stampModified: false });
     setInpSupplierCode('');
@@ -310,12 +310,12 @@ export default function StorePartDeductionRegistrationPage() {
   /** 모달에서 매입처 선택 시 */
   const handleSupplierSelect = (item: { code: string; name: string }) => {
     if (!canEditSuppliers) return;
-    if (selected!.suppliers.some(s => s.code === item.code)) {
-      alert('이미 등록된 매입처입니다.');
-      return;
-    }
     const newSup = buildSupplierRow(item.code, item.name);
     if (!newSup) return;
+    if (selected!.suppliers.some(s => s.code === newSup.code && s.itemCode === newSup.itemCode)) {
+      alert('이미 동일 매입처품목으로 등록된 행이 있습니다.');
+      return;
+    }
     addSupplierToGrid(newSup);
   };
 
@@ -324,18 +324,17 @@ export default function StorePartDeductionRegistrationPage() {
     const rate = Number(inpRate) / 100;
     const amount = Number(inpAmount.replace(/,/g, '')) || 0;
     updateSuppliers(list => list.map(s => {
-      if (!checkedSups.includes(s.code)) return s;
+      if (!checkedSups.includes(rowKeyOf(s))) return s;
       const upd: DeductionSupplier = { ...s };
       if (chkType) {
         upd.type = inpType;
-        // 유형 전환 시 비호환 필드 초기화
         if (inpType !== 'R') upd.fixedRate = undefined;
         if (inpType !== 'A') upd.fixedAmount = undefined;
       }
       if (chkRate && upd.type === 'R') upd.fixedRate = rate;
       if (chkAmount && upd.type === 'A') upd.fixedAmount = amount;
       return upd;
-    }), { targetCodes: checkedSups });
+    }));
     alert(`${checkedSups.length}건 일괄적용 완료.`);
   };
 
@@ -409,22 +408,15 @@ export default function StorePartDeductionRegistrationPage() {
         rows.forEach(r => {
           const codeRaw = String(r[codeKey] || '').trim().replace(/\s/g, '');
           if (!codeRaw) return;
-          // 영숫자 코드 허용 (01B0470 등). 길이 4~10 정도
           if (!/^[A-Za-z0-9]{4,10}$/.test(codeRaw)) return;
           const code = codeRaw;
-          if (selected!.suppliers.some(s => s.code === code) || newSups.some(s => s.code === code)) {
-            skipDup++;
-            return;
-          }
           const nameFromFile = nameKey ? String(r[nameKey] || '').trim() : '';
           const sales = salesKey ? toNum(r[salesKey]) : 0;
           const excludeSales = excludeKey ? toNum(r[excludeKey]) : 0;
 
-          // 매입처 카탈로그에서 일반(기본) 품목 조회
           const master = getSupplierMaster(code);
           const items = getSupplierItems(code);
-          let item = items[0]; // 일반
-          // 파일에 매입처품목코드가 명시돼있고 카탈로그에 있으면 해당 품목 사용
+          let item = items[0]; // 일반(기본)
           if (itemCodeKey && items.length > 0) {
             const wantCode = String(r[itemCodeKey] || '').trim();
             const found = items.find(it => it.itemCode === wantCode);
@@ -432,11 +424,21 @@ export default function StorePartDeductionRegistrationPage() {
           }
           const last4 = (code.replace(/\D/g, '').slice(-4) || '0000').padStart(4, '0');
           const fallbackItemName = itemNameKey ? String(r[itemNameKey] || '').trim() : '';
+          const itemCode = item?.itemCode || `IC0${last4}00`;
+
+          // (매입처+매입처품목) 조합으로 중복 체크
+          if (
+            selected!.suppliers.some(s => s.code === code && s.itemCode === itemCode) ||
+            newSups.some(s => s.code === code && s.itemCode === itemCode)
+          ) {
+            skipDup++;
+            return;
+          }
 
           newSups.push({
             code,
             name: master?.name || nameFromFile || `매입처-${code}`,
-            itemCode: item?.itemCode || `IC0${last4}00`,
+            itemCode,
             itemName: item?.itemName || fallbackItemName || `${master?.name || nameFromFile || '매입처'} 일반`,
             type: 'N',
             sales,
@@ -491,21 +493,30 @@ export default function StorePartDeductionRegistrationPage() {
   const handleSupDelete = () => {
     if (!canEditSuppliers || !checkedSups.length) return alert('삭제할 매입처를 선택하세요.');
     if (!confirm(`${checkedSups.length}건을 삭제하시겠습니까?`)) return;
-    updateSuppliers(list => list.filter(s => !checkedSups.includes(s.code)), { stampModified: false });
+    updateSuppliers(list => list.filter(s => !checkedSups.includes(rowKeyOf(s))), { stampModified: false });
     setCheckedSups([]);
   };
 
-  /** 인라인 매입처 수정 (유형/점유율/공제액/매출제외금액) */
-  const updateOneSupplier = (code: string, patch: Partial<DeductionSupplier>) => {
-    if (!canEditSuppliers) return;
+  /** 인라인 매입처 수정 — (현재 code, 현재 itemCode)로 행을 식별하여 업데이트 */
+  const updateOneSupplier = (currentCode: string, currentItemCode: string, patch: Partial<DeductionSupplier>) => {
+    if (!canEditSuppliers || !selected) return;
+    // 매입처품목코드 변경 시 동일 매입처의 다른 행과 충돌하는지 검사
+    if (patch.itemCode && patch.itemCode !== currentItemCode) {
+      const collision = selected.suppliers.some(s =>
+        s.code === currentCode && s.itemCode === patch.itemCode
+      );
+      if (collision) {
+        alert('해당 매입처품목으로 이미 등록된 행이 있습니다.');
+        return;
+      }
+    }
     updateSuppliers(list => list.map(s => {
-      if (s.code !== code) return s;
+      if (s.code !== currentCode || s.itemCode !== currentItemCode) return s;
       const next: DeductionSupplier = { ...s, ...patch };
-      // 유형 변경 시 비호환 필드 초기화
       if (patch.type && patch.type !== 'R') next.fixedRate = undefined;
       if (patch.type && patch.type !== 'A') next.fixedAmount = undefined;
       return next;
-    }), { targetCodes: [code] });
+    }));
   };
 
   /** 비고(note) 업데이트 — 마스터 그리드에서 인라인 입력 */
@@ -515,7 +526,7 @@ export default function StorePartDeductionRegistrationPage() {
 
   // ===================== 렌더 =====================
   const allMasterChecked = filtered.length > 0 && filtered.every(m => checkedMasters.includes(m.id));
-  const allSupChecked = rows.length > 0 && rows.every(r => checkedSups.includes(r.code));
+  const allSupChecked = rows.length > 0 && rows.every(r => checkedSups.includes(rowKeyOf(r)));
 
   return (
     <div className="erp-page">
@@ -708,7 +719,7 @@ export default function StorePartDeductionRegistrationPage() {
               <thead>
                 <tr>
                   <th style={{ width: 36 }}>
-                    <input type="checkbox" checked={allSupChecked} onChange={e => setCheckedSups(e.target.checked ? rows.map(r => r.code) : [])} />
+                    <input type="checkbox" checked={allSupChecked} onChange={e => setCheckedSups(e.target.checked ? rows.map(r => rowKeyOf(r)) : [])} />
                   </th>
                   <th style={{ width: 44 }}>순번</th>
                   <th style={{ width: 90 }}>매입처코드</th>
@@ -733,10 +744,12 @@ export default function StorePartDeductionRegistrationPage() {
               <tbody>
                 {rows.length === 0 ? (
                   <tr className="erp-empty-row"><td colSpan={19}>{selected ? '매입처를 추가하거나 [파일등록] / [매출조회] 로 생성하세요.' : '공제정보를 먼저 선택/생성하세요.'}</td></tr>
-                ) : rows.map((r, i) => (
-                  <tr key={r.code}>
+                ) : rows.map((r, i) => {
+                  const rk = rowKeyOf(r);
+                  return (
+                  <tr key={rk}>
                     <td style={{ textAlign: 'center' }}>
-                      <input type="checkbox" checked={checkedSups.includes(r.code)} onChange={e => setCheckedSups(p => e.target.checked ? [...p, r.code] : p.filter(x => x !== r.code))} />
+                      <input type="checkbox" checked={checkedSups.includes(rk)} onChange={e => setCheckedSups(p => e.target.checked ? [...p, rk] : p.filter(x => x !== rk))} />
                     </td>
                     <td style={{ textAlign: 'center' }}>{i + 1}</td>
                     <td style={{ textAlign: 'center' }}>{r.code}</td>
@@ -754,7 +767,7 @@ export default function StorePartDeductionRegistrationPage() {
                             disabled={!canEditSuppliers}
                             onChange={e => {
                               const it = items.find(x => x.itemCode === e.target.value);
-                              if (it) updateOneSupplier(r.code, { itemCode: it.itemCode, itemName: it.itemName });
+                              if (it) updateOneSupplier(r.code, r.itemCode, { itemCode: it.itemCode, itemName: it.itemName });
                             }}
                           >
                             {items.map(it => <option key={it.itemCode} value={it.itemCode}>{it.itemName}</option>)}
@@ -768,7 +781,7 @@ export default function StorePartDeductionRegistrationPage() {
                         style={{ width: '100%' }}
                         value={r.type}
                         disabled={!canEditSuppliers}
-                        onChange={e => updateOneSupplier(r.code, { type: e.target.value as DeductionType })}
+                        onChange={e => updateOneSupplier(r.code, r.itemCode, { type: e.target.value as DeductionType })}
                       >
                         <option value="N">일반</option>
                         <option value="R">고정점유율</option>
@@ -785,7 +798,7 @@ export default function StorePartDeductionRegistrationPage() {
                         disabled={!canEditSuppliers}
                         onChange={e => {
                           const v = e.target.value.replace(/[^\d]/g, '');
-                          updateOneSupplier(r.code, { excludeSales: v ? Number(v) : 0 });
+                          updateOneSupplier(r.code, r.itemCode, { excludeSales: v ? Number(v) : 0 });
                         }}
                       />
                     </td>
@@ -797,23 +810,22 @@ export default function StorePartDeductionRegistrationPage() {
                           className="erp-input"
                           style={{ width: '100%', textAlign: 'right' }}
                           placeholder="%"
-                          value={rateDrafts[r.code] ?? fmtRateInput(r.fixedRate)}
+                          value={rateDrafts[rk] ?? fmtRateInput(r.fixedRate)}
                           disabled={!canEditSuppliers}
                           onChange={e => {
                             const v = e.target.value;
                             if (v === '') {
-                              setRateDrafts(p => ({ ...p, [r.code]: '' }));
-                              updateOneSupplier(r.code, { fixedRate: undefined });
+                              setRateDrafts(p => ({ ...p, [rk]: '' }));
+                              updateOneSupplier(r.code, r.itemCode, { fixedRate: undefined });
                               return;
                             }
-                            // 정수 3자리 + 소수점 2자리까지만 허용
                             if (!/^\d{0,3}(\.\d{0,2})?$/.test(v)) return;
-                            setRateDrafts(p => ({ ...p, [r.code]: v }));
+                            setRateDrafts(p => ({ ...p, [rk]: v }));
                             const num = Number(v);
-                            if (isFinite(num)) updateOneSupplier(r.code, { fixedRate: num / 100 });
+                            if (isFinite(num)) updateOneSupplier(r.code, r.itemCode, { fixedRate: num / 100 });
                           }}
                           onBlur={() => setRateDrafts(p => {
-                            const c = { ...p }; delete c[r.code]; return c;
+                            const c = { ...p }; delete c[rk]; return c;
                           })}
                         />
                       ) : (
@@ -827,16 +839,16 @@ export default function StorePartDeductionRegistrationPage() {
                           className="erp-input"
                           style={{ width: '100%', textAlign: 'right', fontWeight: 700 }}
                           placeholder="공제액"
-                          value={amountDrafts[r.code] ?? (r.fixedAmount ? fmtNum(r.fixedAmount) : '')}
+                          value={amountDrafts[rk] ?? (r.fixedAmount ? fmtNum(r.fixedAmount) : '')}
                           disabled={!canEditSuppliers}
                           onChange={e => {
                             const raw = e.target.value.replace(/[^\d]/g, '');
                             const display = raw ? fmtNum(Number(raw)) : '';
-                            setAmountDrafts(p => ({ ...p, [r.code]: display }));
-                            updateOneSupplier(r.code, { fixedAmount: raw ? Number(raw) : undefined });
+                            setAmountDrafts(p => ({ ...p, [rk]: display }));
+                            updateOneSupplier(r.code, r.itemCode, { fixedAmount: raw ? Number(raw) : undefined });
                           }}
                           onBlur={() => setAmountDrafts(p => {
-                            const c = { ...p }; delete c[r.code]; return c;
+                            const c = { ...p }; delete c[rk]; return c;
                           })}
                         />
                       ) : (
@@ -851,7 +863,8 @@ export default function StorePartDeductionRegistrationPage() {
                     <td style={{ textAlign: 'center' }}>{r.modEmpNo || '-'}</td>
                     <td style={{ textAlign: 'center' }}>{r.modName || '-'}</td>
                   </tr>
-                ))}
+                  );
+                })}
                 {rows.length > 0 && (() => {
                   const fixedSum = rows.filter(r => r.type === 'A').reduce((a, r) => a + r.deduction, 0);
                   const ratedSum = rows.filter(r => r.type === 'R').reduce((a, r) => a + r.deduction, 0);
