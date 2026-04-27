@@ -21,6 +21,9 @@ type DeductionType = 'N' | 'R' | 'A' | 'E';
 const today = () => new Date().toISOString().slice(0, 10);
 const currentYm = () => new Date().toISOString().slice(0, 7);
 const fmtNum = (n: number) => (n || 0).toLocaleString('ko-KR');
+// VAT 10% 포함 (입력 공급가 → 저장/계산용 금액)
+const VAT_RATE = 0.1;
+const withVAT = (base: number) => Math.round((base || 0) * (1 + VAT_RATE));
 // 고정점유율 (소수점 2자리까지) 표시 — float 오차 제거
 const fmtRateInput = (rate?: number): string => {
   if (rate === undefined || rate === null) return '';
@@ -77,7 +80,8 @@ export default function StorePartDeductionRegistrationPage() {
   const selected = useMemo(() => masters.find(m => m.id === selectedId) || null, [masters, selectedId]);
   const rows = useMemo(() => {
     if (!selected) return [];
-    return calcDeduction(selected.totalLaborCost, selected.suppliers);
+    // 총인건비는 공급가로 저장하고, 계산 시 VAT 10% 가산한 금액 사용
+    return calcDeduction(withVAT(selected.totalLaborCost), selected.suppliers);
   }, [selected]);
 
   // 현재 선택된 영업점의 매입처 코드 리스트 (모달 필터링용)
@@ -562,8 +566,11 @@ export default function StorePartDeductionRegistrationPage() {
               </select>
             </div>
             <div className="erp-form-label">총인건비<span className="required">*</span></div>
-            <div className="erp-form-cell">
-              <input type="text" className="erp-input" style={{ width: '100%', textAlign: 'right' }} value={fLaborCost ? fmtNum(Number(fLaborCost.replace(/,/g,''))) : ''} onChange={e => setFLaborCost(e.target.value.replace(/[^\d]/g, ''))} disabled={!!selected && selected.status === '확정'} />
+            <div className="erp-form-cell" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 2 }}>
+              <input type="text" className="erp-input" style={{ width: '100%', textAlign: 'right' }} value={fLaborCost ? fmtNum(Number(fLaborCost.replace(/,/g,''))) : ''} onChange={e => setFLaborCost(e.target.value.replace(/[^\d]/g, ''))} disabled={!!selected && selected.status === '확정'} placeholder="공급가" />
+              <span style={{ fontSize: 10, color: '#6b7280', textAlign: 'right' }}>
+                VAT 포함 {fmtNum(withVAT(Number(fLaborCost.replace(/,/g, '')) || 0))}원
+              </span>
             </div>
             <div className="erp-form-cell" style={{ justifyContent: 'flex-end', gap: 4, paddingRight: 8 }}>
               <button className="erp-btn-header" onClick={handleFormReset}>초기화</button>
@@ -587,7 +594,7 @@ export default function StorePartDeductionRegistrationPage() {
                   <th>공용알바공제번호</th>
                   <th style={{ width: 90 }}>정산년월</th>
                   <th style={{ width: 110 }}>영업점</th>
-                  <th>총인건비</th>
+                  <th>총인건비(VAT포함)</th>
                   <th style={{ width: 80 }}>진행상태</th>
                   <th style={{ width: 100 }}>정산등록일</th>
                   <th style={{ width: 100 }}>정산등록사번</th>
@@ -606,7 +613,7 @@ export default function StorePartDeductionRegistrationPage() {
                     <td style={{ textAlign: 'center' }}>{m.id}</td>
                     <td style={{ textAlign: 'center' }}>{m.yearMonth}</td>
                     <td style={{ textAlign: 'center' }}>{m.storeName}</td>
-                    <td style={{ textAlign: 'right' }}>{fmtNum(m.totalLaborCost)}</td>
+                    <td style={{ textAlign: 'right' }}>{fmtNum(withVAT(m.totalLaborCost))}</td>
                     <td style={{ textAlign: 'center', color: m.status === '확정' ? '#dc2626' : '#2563eb' }}>{m.status}</td>
                     <td style={{ textAlign: 'center' }}>{m.regDate}</td>
                     <td style={{ textAlign: 'center' }}>{m.regEmpNo}</td>
@@ -850,7 +857,8 @@ export default function StorePartDeductionRegistrationPage() {
                   const fixedSum = rows.filter(r => r.type === 'A').reduce((a, r) => a + r.deduction, 0);
                   const ratedSum = rows.filter(r => r.type === 'R').reduce((a, r) => a + r.deduction, 0);
                   const normals = rows.filter(r => r.type === 'N');
-                  const normalShare = (selected?.totalLaborCost || 0) - fixedSum - ratedSum;
+                  const totalCostVAT = withVAT(selected?.totalLaborCost || 0);
+                  const normalShare = totalCostVAT - fixedSum - ratedSum;
                   const normalTotalSales = normals.reduce((a, r) => a + r.finalSales, 0);
                   const totalDed = rows.reduce((a, r) => a + (r.type === 'E' ? 0 : r.deduction), 0);
                   return (
@@ -859,7 +867,7 @@ export default function StorePartDeductionRegistrationPage() {
                         <tr style={{ backgroundColor: '#fefce8', fontSize: 11, color: '#854d0e' }}>
                           <td colSpan={19} style={{ padding: '4px 8px' }}>
                             <strong>공제 산출 근거</strong> &nbsp;|&nbsp;
-                            총인건비 {fmtNum(selected?.totalLaborCost || 0)}원
+                            총인건비(VAT포함) {fmtNum(totalCostVAT)}원
                             {ratedSum > 0 && <> − 고정점유율(R) 합계 {fmtNum(ratedSum)}원</>}
                             {fixedSum > 0 && <> − 고정공제(A) 합계 {fmtNum(fixedSum)}원</>}
                             &nbsp;= <strong>일반형 분배목 {fmtNum(normalShare)}원</strong>
