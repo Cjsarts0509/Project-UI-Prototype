@@ -566,11 +566,8 @@ export default function StorePartDeductionRegistrationPage() {
               </select>
             </div>
             <div className="erp-form-label">총인건비<span className="required">*</span></div>
-            <div className="erp-form-cell" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 2 }}>
+            <div className="erp-form-cell">
               <input type="text" className="erp-input" style={{ width: '100%', textAlign: 'right' }} value={fLaborCost ? fmtNum(Number(fLaborCost.replace(/,/g,''))) : ''} onChange={e => setFLaborCost(e.target.value.replace(/[^\d]/g, ''))} disabled={!!selected && selected.status === '확정'} placeholder="공급가" />
-              <span style={{ fontSize: 10, color: '#6b7280', textAlign: 'right' }}>
-                VAT 포함 {fmtNum(withVAT(Number(fLaborCost.replace(/,/g, '')) || 0))}원
-              </span>
             </div>
             <div className="erp-form-cell" style={{ justifyContent: 'flex-end', gap: 4, paddingRight: 8 }}>
               <button className="erp-btn-header" onClick={handleFormReset}>초기화</button>
