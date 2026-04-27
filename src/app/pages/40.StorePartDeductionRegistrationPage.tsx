@@ -594,6 +594,7 @@ export default function StorePartDeductionRegistrationPage() {
                   <th>공용알바공제번호</th>
                   <th style={{ width: 90 }}>정산년월</th>
                   <th style={{ width: 110 }}>영업점</th>
+                  <th>총인건비</th>
                   <th>총인건비(VAT포함)</th>
                   <th style={{ width: 80 }}>진행상태</th>
                   <th style={{ width: 100 }}>정산등록일</th>
@@ -604,7 +605,7 @@ export default function StorePartDeductionRegistrationPage() {
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr className="erp-empty-row"><td colSpan={10}>조회된 데이터가 없습니다.</td></tr>
+                  <tr className="erp-empty-row"><td colSpan={11}>조회된 데이터가 없습니다.</td></tr>
                 ) : filtered.map(m => (
                   <tr key={m.id} className={selectedId === m.id ? 'selected' : ''} onClick={() => handleSelectMaster(m)}>
                     <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
@@ -613,6 +614,7 @@ export default function StorePartDeductionRegistrationPage() {
                     <td style={{ textAlign: 'center' }}>{m.id}</td>
                     <td style={{ textAlign: 'center' }}>{m.yearMonth}</td>
                     <td style={{ textAlign: 'center' }}>{m.storeName}</td>
+                    <td style={{ textAlign: 'right' }}>{fmtNum(m.totalLaborCost)}</td>
                     <td style={{ textAlign: 'right' }}>{fmtNum(withVAT(m.totalLaborCost))}</td>
                     <td style={{ textAlign: 'center', color: m.status === '확정' ? '#dc2626' : '#2563eb' }}>{m.status}</td>
                     <td style={{ textAlign: 'center' }}>{m.regDate}</td>
