@@ -10,6 +10,9 @@ type YN = '전체' | 'Y' | 'N';
 const currentYm = () => new Date().toISOString().slice(0, 7);
 const today = () => new Date().toISOString().slice(0, 10);
 const fmtNum = (n: number) => (n || 0).toLocaleString('ko-KR');
+// VAT 10% 포함 — 페이지 40과 동일 정책
+const VAT_RATE = 0.1;
+const withVAT = (base: number) => Math.round((base || 0) * (1 + VAT_RATE));
 
 export default function StorePartDeductionConfirmPage() {
   // 초기엔 확정된 건만 노출되도록 — 그러나 더미는 전부 작성중이라 전체 보여줌
@@ -35,7 +38,7 @@ export default function StorePartDeductionConfirmPage() {
   const [checkedSups, setCheckedSups] = useState<string[]>([]);
 
   const selected = useMemo(() => masters.find(m => m.id === selectedId) || null, [masters, selectedId]);
-  const rows = useMemo(() => selected ? calcDeduction(selected.totalLaborCost, selected.suppliers) : [], [selected]);
+  const rows = useMemo(() => selected ? calcDeduction(withVAT(selected.totalLaborCost), selected.suppliers) : [], [selected]);
 
   // 체크된 마스터 기준 버튼 활성/비활성 (스토리보드 규칙)
   const checkedRows = masters.filter(m => checkedMasters.includes(m.id));
@@ -109,7 +112,7 @@ export default function StorePartDeductionConfirmPage() {
     if (!filtered.length) return alert('다운로드할 데이터가 없습니다.');
     const data: any[] = [];
     filtered.forEach(m => {
-      const mr = calcDeduction(m.totalLaborCost, m.suppliers);
+      const mr = calcDeduction(withVAT(m.totalLaborCost), m.suppliers);
       mr.forEach((r, i) => {
         data.push({
           공용알바공제번호: m.id, 정산년월: m.yearMonth, 영업점: m.storeName,
@@ -203,7 +206,7 @@ export default function StorePartDeductionConfirmPage() {
                   <th>공용알바공제번호</th>
                   <th style={{ width: 90 }}>정산년월</th>
                   <th style={{ width: 100 }}>영업점</th>
-                  <th style={{ width: 110 }}>총인건비</th>
+                  <th style={{ width: 130 }}>총인건비(VAT포함)</th>
                   <th style={{ width: 80 }}>매입처수</th>
                   <th style={{ width: 80 }}>진행상태</th>
                   <th style={{ width: 100 }}>최종확정여부</th>
@@ -228,7 +231,7 @@ export default function StorePartDeductionConfirmPage() {
                     <td style={{ textAlign: 'center' }}>{m.id}</td>
                     <td style={{ textAlign: 'center' }}>{m.yearMonth}</td>
                     <td style={{ textAlign: 'center' }}>{m.storeName}</td>
-                    <td style={{ textAlign: 'right' }}>{fmtNum(m.totalLaborCost)}</td>
+                    <td style={{ textAlign: 'right' }}>{fmtNum(withVAT(m.totalLaborCost))}</td>
                     <td style={{ textAlign: 'right' }}>{m.suppliers.length}</td>
                     <td style={{ textAlign: 'center', color: m.status === '확정' ? '#dc2626' : '#2563eb' }}>{m.status}</td>
                     <td style={{ textAlign: 'center', fontWeight: 700, color: m.finalConfirmed === 'Y' ? '#16a34a' : '#6b7280' }}>{m.finalConfirmed}</td>
