@@ -558,6 +558,16 @@ export default function StorePartDeductionRegistrationPage() {
       <div className="erp-section-group" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <div className="erp-section-header">
           <div className="erp-section-title">점포별 공용알바 공제매입처정보</div>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button className="erp-btn-action" onClick={handleBulkApply}>일괄적용</button>
+            <button className="erp-btn-action" onClick={handleQuerySales}>매출조회</button>
+            <button className="erp-btn-action" onClick={() => fileInputRef.current?.click()}>파일등록</button>
+            <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept=".xlsx,.xls" onChange={handleFileUpload} />
+            <button className="erp-btn-header" onClick={handleSupReset}>초기화</button>
+            <button className="erp-btn-action" onClick={handleExcelDown}>엑셀다운</button>
+            <button className="erp-btn-action" onClick={handleSupSave}>저장</button>
+            <button className="erp-btn-danger" onClick={handleSupDelete}>삭제</button>
+          </div>
         </div>
         <div className="erp-section" style={{ marginBottom: 4 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 6, flexWrap: 'wrap' }}>
@@ -606,16 +616,6 @@ export default function StorePartDeductionRegistrationPage() {
               <span style={{ fontSize: 11 }}>공제액</span>
             </label>
             <input className="erp-input" style={{ width: 110, textAlign: 'right' }} value={inpAmount ? fmtNum(Number(inpAmount.replace(/,/g,''))) : ''} onChange={e => setInpAmount(e.target.value.replace(/[^\d]/g,''))} disabled={!chkAmount || inpType !== 'A'} />
-            <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
-              <button className="erp-btn-action" onClick={handleBulkApply}>일괄적용</button>
-              <button className="erp-btn-action" onClick={handleQuerySales}>매출조회</button>
-              <button className="erp-btn-action" onClick={() => fileInputRef.current?.click()}>파일등록</button>
-              <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept=".xlsx,.xls" onChange={handleFileUpload} />
-              <button className="erp-btn-header" onClick={handleSupReset}>초기화</button>
-              <button className="erp-btn-action" onClick={handleExcelDown}>엑셀다운</button>
-              <button className="erp-btn-action" onClick={handleSupSave}>저장</button>
-              <button className="erp-btn-danger" onClick={handleSupDelete}>삭제</button>
-            </div>
           </div>
         </div>
 
