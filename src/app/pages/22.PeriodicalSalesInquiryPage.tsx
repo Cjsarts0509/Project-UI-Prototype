@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, Search, Download, FileUp, Send } from 'lucide-react';
+import { Calendar, Search, Download, FileUp, Send, Image as ImageIcon } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -13,6 +13,7 @@ import * as XLSX from 'xlsx';
 import { ProductCodeSearchField } from '../components/ProductCodeSearchField';
 import { SupplierSearchModal } from '../components/SupplierSearchModal';
 import { SupplierItemSearchModal } from '../components/SupplierItemSearchModal';
+import { ProductImagePopup } from '../components/ProductImagePopup';
 
 const STORE_CODES = [
   { code: "001", name: "광화문점" }, { code: "002", name: "대전점" }, { code: "003", name: "원그로브점" },
@@ -105,6 +106,9 @@ export default function PeriodicalSalesInquiryPage() {
   const [salesData, setSalesData] = useState<any[]>([]);
   // ★ 체크박스 선택된 Row ID 관리
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
+  // ★ 그리드에서 누른 줄 (상품이미지조회 대상)
+  const [activeRowId, setActiveRowId] = useState<string | null>(null);
+  const [isImagePopupOpen, setIsImagePopupOpen] = useState(false);
 
   // 매입처 검색 핸들러
   const handleSuppCodeSearch = () => {
@@ -200,6 +204,7 @@ export default function PeriodicalSalesInquiryPage() {
               pName: p.productName,
               groupCategory: p.groupCategory,
               brand: p.brand || '-',
+              imageUrl: p.imageUrl || '',
               listPrice: p.listPrice || 1000,
               
               // 매입처 정보
@@ -225,6 +230,7 @@ export default function PeriodicalSalesInquiryPage() {
 
       setSalesData(generated);
       setSelectedRows([]); // 조회 시 체크박스 초기화
+      setActiveRowId(null);
   };
 
   const handleReset = () => {
@@ -235,7 +241,20 @@ export default function PeriodicalSalesInquiryPage() {
       setSubCategoryCode(''); setSubCategoryName('');
       setSalesData([]);
       setSelectedRows([]);
+      setActiveRowId(null);
+      setIsImagePopupOpen(false);
   };
+
+  // ★ 상품이미지조회: 누른 줄(없으면 체크한 첫 줄)의 상품 이미지를 팝업으로
+  const handleImageInquiry = () => {
+      if (salesData.length === 0) return alert("먼저 조회해주세요.");
+      const targetId = activeRowId ?? selectedRows[0] ?? null;
+      if (!targetId) return alert("이미지를 조회할 항목을 그리드에서 선택해주세요.");
+      setActiveRowId(targetId);
+      setIsImagePopupOpen(true);
+  };
+
+  const activeRow = salesData.find(r => r.id === activeRowId) || null;
 
   // 체크박스 핸들러
   const handleSelectAll = (checked: boolean) => {
@@ -394,6 +413,9 @@ export default function PeriodicalSalesInquiryPage() {
           
       </div>
       <div className="erp-search-actions">
+             <Button variant="outline" className={headerBtnClass} onClick={handleImageInquiry}>
+                 <ImageIcon className="w-3 h-3 mr-1"/> 상품이미지조회
+             </Button>
              <Button variant="outline" className={headerBtnClass} onClick={handleReset}>초기화(F3)</Button>
              <Button variant="outline" className={headerBtnClass} onClick={handleSearch}>조회(F4)</Button>
       </div>
@@ -453,8 +475,16 @@ export default function PeriodicalSalesInquiryPage() {
                   <TableBody>
                       {salesData.map((row) => {
                           const isSelected = selectedRows.includes(row.id);
+                          const isActive = row.id === activeRowId;
                           return (
-                              <TableRow key={row.id} className={cn("h-8 border-b border-gray-200 transition-colors", isSelected ? "bg-blue-50/50" : "bg-white hover:bg-gray-50")}>
+                              <TableRow
+                                  key={row.id}
+                                  onClick={() => setActiveRowId(row.id)}
+                                  className={cn(
+                                      "h-8 border-b border-gray-200 transition-colors cursor-pointer",
+                                      isActive ? "bg-[#fff4c2] hover:bg-[#fff4c2] outline outline-1 -outline-offset-1 outline-orange-400" : isSelected ? "bg-blue-50/50" : "bg-white hover:bg-gray-50"
+                                  )}
+                              >
                                   {/* 체크박스 셀 */}
                                   <TableCell className="text-center border-r border-gray-200">
                                       <Checkbox 
@@ -519,6 +549,11 @@ export default function PeriodicalSalesInquiryPage() {
       </div>
 
       {/* ProductSearchModal은 ProductCodeSearchField 내부에서 관리 */}
+      <ProductImagePopup
+        isOpen={isImagePopupOpen}
+        onClose={() => setIsImagePopupOpen(false)}
+        product={activeRow ? { productCode: activeRow.pCode, productName: activeRow.pName, brand: activeRow.brand, groupCategory: activeRow.groupCategory, listPrice: activeRow.listPrice, imageUrl: activeRow.imageUrl } : null}
+      />
       <SupplierSearchModal isOpen={isSuppModalOpen} onClose={() => setIsSuppModalOpen(false)} initialSearchName={suppName || suppCode} onSelect={(item) => { setSuppCode(item.code); setSuppName(item.name); }} />
       <SupplierItemSearchModal isOpen={isSuppItemModalOpen} onClose={() => setIsSuppItemModalOpen(false)} supplierCode={suppCode} initialSearchName={suppItemName || suppItemCode} onSelect={(item) => { setSuppItemCode(item.code); setSuppItemName(item.name); }} />
     </div>
